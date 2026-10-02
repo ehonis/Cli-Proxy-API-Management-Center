@@ -36,6 +36,11 @@
   }
 }
 
+.viewSelect {
+  flex: 0 0 160px;
+  min-width: 140px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;

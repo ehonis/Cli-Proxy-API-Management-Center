@@ -165,27 +165,27 @@
 // 深色主题（#191919）
 [data-theme='dark'] {
   // 极简暖灰：深色模式（提升对比度与层级）
-  --bg-secondary: #151412; // 页面背景
-  --bg-primary: #1d1b18; // 容器/卡片背景
-  --bg-tertiary: #262320; // hover/次级背景
-  --bg-hover: #2e2a26;
-  --bg-quinary: #191714;
+  --bg-secondary: #0b0b0c; // page background (near-black console)
+  --bg-primary: #111113; // cards / containers
+  --bg-tertiary: #1a1a1d; // hover / secondary surfaces
+  --bg-hover: #202024;
+  --bg-quinary: #0f0f11;
   --bg-error-light: rgba(198, 87, 70, 0.18);
-  --floating-surface: #2a2723;
+  --floating-surface: #18181b;
   --floating-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
 
-  --text-primary: #f6f4f1;
-  --text-secondary: #c9c3bb;
-  --text-tertiary: #9c958d;
-  --text-quaternary: #6f6962;
+  --text-primary: #f4f4f5;
+  --text-secondary: #b4b4bb;
+  --text-tertiary: #7c7c85;
+  --text-quaternary: #52525a;
   --text-muted: var(--text-tertiary);
 
-  --border-color: #3a3530;
+  --border-color: #232327;
   --border-secondary: var(--border-color);
-  --border-primary: #4a453f;
-  --border-hover: #5a544d;
+  --border-primary: #2e2e33;
+  --border-hover: #3a3a40;
 
-  --primary-color: #8b8680;
+  --primary-color: #8a8a93;
   --primary-hover: #9a948e;
   --primary-active: #a6a099;
   --primary-contrast: #ffffff;
@@ -209,7 +209,7 @@
   --failure-badge-text: #f1b0a6;
   --failure-badge-border: rgba(198, 87, 70, 0.5);
 
-  --count-badge-bg: rgba(139, 134, 128, 0.28);
+  --count-badge-bg: rgba(255, 255, 255, 0.08);
   --count-badge-text: var(--primary-active);
 
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
@@ -236,8 +236,14 @@
 
   // 深色卡面上 #10b981 亮度超出 OKLCH 0.48–0.67 区间，且与失败色的色盲分离度不足，
   // 因此深色单独降一档。三套主题均已通过对比度/色盲/亮度校验。
-  --viz-success: #0fae78;
+  --viz-success: #22c55e;
   --viz-failure: #cf4b3a;
+
+  // Quota ledger meters
+  --ledger-high: #22c55e;
+  --ledger-medium: #eab308;
+  --ledger-low: #ef4444;
+  --ledger-track: rgba(255, 255, 255, 0.09);
 }
 
 @media (max-width: 768px),
