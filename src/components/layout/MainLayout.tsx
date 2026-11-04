@@ -27,6 +27,7 @@ import {
   IconSidebarProviders,
   IconSidebarQuickStart,
   IconSidebarQuota,
+  IconSidebarRouting,
   IconSidebarStore,
   IconSidebarSystem,
   IconChevronDown,
@@ -34,6 +35,7 @@ import {
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import {
   useAuthStore,
+  useLoginTransitionStore,
   useConfigStore,
   useLanguageStore,
   useNotificationStore,
@@ -60,6 +62,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   authFiles: <IconSidebarAuthFiles size={18} />,
   oauth: <IconSidebarOauth size={18} />,
   quota: <IconSidebarQuota size={18} />,
+  routing: <IconSidebarRouting size={18} />,
   plugins: <IconSidebarPlugins size={18} />,
   pluginStore: <IconSidebarStore size={18} />,
   config: <IconSidebarConfig size={18} />,
@@ -351,6 +354,7 @@ export function MainLayout() {
 
   const fullBrandName = 'CLI Proxy API Management Center';
   const abbrBrandName = t('title.abbr');
+  const arrivingFromLogin = useLoginTransitionStore((state) => state.phase === 'revealing');
   const isLogsPage = location.pathname.startsWith('/logs');
   const isPluginResourcePage = location.pathname.startsWith('/plugin-pages');
   const showSidebarLabels = !sidebarCollapsed || sidebarOpen;
@@ -632,6 +636,12 @@ export function MainLayout() {
           labelKey: 'nav.oauth',
           metaKey: 'nav_meta.oauth',
           icon: sidebarIcons.oauth,
+        },
+        {
+          path: '/routing',
+          labelKey: 'nav.routing',
+          metaKey: 'nav_meta.routing',
+          icon: sidebarIcons.routing,
         },
         ...(isApiKeyFunConfigured ? [quickStartNavItem] : []),
       ],
@@ -974,7 +984,7 @@ export function MainLayout() {
     <div
       className={`app-shell ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''} ${
         isPluginResourcePage ? 'plugin-resource-shell' : ''
-      }`}
+      } ${arrivingFromLogin ? 'app-shell--arriving' : ''}`}
     >
       <div className="top-gradient-blur" aria-hidden="true" />
 
