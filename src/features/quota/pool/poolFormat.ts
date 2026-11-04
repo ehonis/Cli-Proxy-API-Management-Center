@@ -75,3 +75,12 @@ export const formatResetCompact = (ms: number, now: number, locale?: string) => 
 export function bandOpacity(index: number, count: number) {
   return count <= 1 ? 0.6 : 0.2 + (0.6 * index) / (count - 1);
 }
+
+/** "11/10, 12:06 PM": the reset instant for narrow ledger cells. */
+export const formatResetNoWeekday = (ms: number, locale?: string) =>
+  new Date(ms).toLocaleString(locale, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });

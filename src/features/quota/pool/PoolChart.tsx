@@ -333,8 +333,8 @@ export function PoolChart({
       >
         <defs>
           <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--pool-accent)" stopOpacity="0.42" />
-            <stop offset="100%" stopColor="var(--pool-accent)" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="var(--pool-accent)" stopOpacity="0.28" />
+            <stop offset="78%" stopColor="var(--pool-accent)" stopOpacity="0.02" />
           </linearGradient>
           <clipPath id={clipId}>
             <rect x={M.left} y={0} width={plotW} height={M.top + plotH} />

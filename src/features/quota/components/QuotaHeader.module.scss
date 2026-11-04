@@ -14,10 +14,11 @@
 
 .copy {
   display: flex;
+  flex: 1 1 0;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 4px 16px;
-  min-width: 0;
+  min-width: 280px;
 }
 
 .title {

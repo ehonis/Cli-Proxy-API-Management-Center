@@ -28,6 +28,7 @@ import {
   formatPercent,
   formatResetCompact,
   formatResetInstant,
+  formatResetNoWeekday,
   formatWhen,
 } from '../pool/poolFormat';
 import {
@@ -102,11 +103,19 @@ function LimitCell({
       ? col.resetLabel.trim()
       : null;
   const tone = ledgerTone(col.remaining);
-  const instant = hasReset ? formatResetInstant(col.resetAtMs!, i18n.resolvedLanguage) : null;
+  const locale = i18n.resolvedLanguage;
+  const instant = hasReset ? formatResetInstant(col.resetAtMs!, locale) : null;
   // Without a countdown the bottom line says why, instead of crowding the top.
-  const bottom =
-    instant ??
-    (fallback && col.remaining !== 100 ? fallback : t('quota_management.ledger_no_reset'));
+  const reason =
+    fallback && col.remaining !== 100 ? fallback : t('quota_management.ledger_no_reset');
+  const bottom = instant ? (
+    <>
+      <span className={styles.dateLong}>{instant}</span>
+      <span className={styles.dateShort}>{formatResetNoWeekday(col.resetAtMs!, locale)}</span>
+    </>
+  ) : (
+    reason
+  );
   return (
     <div className={styles.cell} role="cell">
       <span className={styles.cellLabel}>{label}</span>
@@ -131,7 +140,7 @@ function LimitCell({
           style={{ width: `${col.remaining ?? 0}%` }}
         />
       </div>
-      <div className={styles.cellDate} title={bottom}>
+      <div className={styles.cellDate} title={instant ?? reason}>
         {bottom}
       </div>
     </div>
@@ -204,8 +213,7 @@ function ClaudeResetAction({
   return (
     <>
       <span className={styles.resetsLeft}>
-        <span className={styles.resetsLabel}>{t('claude_reset.remaining')}: </span>
-        <b title={t('claude_reset.remaining')}>{reset.count ?? '--'}</b>
+        {t('claude_reset.remaining')}: <b>{reset.count ?? '--'}</b>
       </span>
       <button
         type="button"
@@ -281,8 +289,10 @@ function LedgerRow({
         <div className={styles.sub}>
           <ProviderIcon type={entry.type} resolvedTheme={resolvedTheme} />
           <span className={styles.subText}>
-            {showEmails && email && email !== label ? email : getTypeLabel(t, entry.type)}
-            {' · '}
+            <span className={styles.subProvider}>
+              {showEmails && email && email !== label ? email : getTypeLabel(t, entry.type)}
+              {' · '}
+            </span>
             {updated}
           </span>
         </div>
