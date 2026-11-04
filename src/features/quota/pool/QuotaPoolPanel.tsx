@@ -16,30 +16,24 @@ import {
 } from '@/features/authFiles/constants';
 import type { ResolvedTheme } from '@/types';
 import { PoolChart, type PoolChartMode } from './PoolChart';
+import {
+  BURN_WINDOWS,
+  FUTURE_USAGE,
+  MIN_OFFSET_WEEKS,
+  type BurnWindow,
+  type FutureUsage,
+  type PoolSettings,
+} from './poolSettings';
 import { DAY_MS, type PoolModel } from './poolModel';
-import { formatMonthDay, formatPercent, formatRate, formatWhen } from './poolFormat';
+import {
+  bandOpacity,
+  formatMonthDay,
+  formatPercent,
+  formatRate,
+  formatWhen,
+} from './poolFormat';
 import type { PoolProvider } from './poolInputs';
 import styles from './QuotaPoolPanel.module.scss';
-
-export const BURN_WINDOWS = [1, 3, 6] as const;
-export type BurnWindow = (typeof BURN_WINDOWS)[number];
-
-export const FUTURE_USAGE = ['same', 'double', 'half', 'none'] as const;
-export type FutureUsage = (typeof FUTURE_USAGE)[number];
-export const FUTURE_FACTOR: Record<FutureUsage, number> = {
-  same: 1,
-  double: 2,
-  half: 0.5,
-  none: 0,
-};
-
-export interface PoolSettings {
-  mode: PoolChartMode;
-  burnWindow: BurnWindow;
-  future: FutureUsage;
-  showAccounts: boolean;
-  offsetWeeks: number;
-}
 
 export interface PoolCardData {
   type: PoolProvider;
@@ -74,13 +68,12 @@ function Segmented<T extends string | number>({
   label: string;
 }) {
   return (
-    <div className={styles.segmented} role="radiogroup" aria-label={label}>
+    <div className={styles.segmented} role="group" aria-label={label}>
       {options.map((option) => (
         <button
           key={String(option.value)}
           type="button"
-          role="radio"
-          aria-checked={value === option.value}
+          aria-pressed={value === option.value}
           className={styles.segment}
           onClick={() => onChange(option.value)}
         >
@@ -214,9 +207,17 @@ function PoolCard({
           <span className={styles.swatchDashed} />
           {t('quota_management.pool_legend_projected')}
         </span>
-        {settings.showAccounts && settings.mode === 'remaining' && (
-          <span className={styles.legendNote}>{t('quota_management.pool_legend_accounts')}</span>
-        )}
+        {settings.showAccounts &&
+          settings.mode === 'remaining' &&
+          model.accounts.map((account, index) => (
+            <span key={account.key} className={styles.legendItem}>
+              <span
+                className={styles.swatchBand}
+                style={{ opacity: bandOpacity(index, model.accounts.length) }}
+              />
+              {account.label}
+            </span>
+          ))}
       </footer>
     </article>
   );
@@ -272,6 +273,7 @@ export function QuotaPoolPanel({
               value={settings.future}
               onChange={(value) => onSettingsChange({ future: value as FutureUsage })}
               ariaLabelledBy="pool-future-label"
+              ariaLabel={t('quota_management.pool_future')}
               size="sm"
               options={FUTURE_USAGE.map((value) => ({
                 value,
@@ -298,6 +300,7 @@ export function QuotaPoolPanel({
           type="button"
           className={styles.navButton}
           onClick={() => onSettingsChange({ offsetWeeks: settings.offsetWeeks - 1 })}
+          disabled={settings.offsetWeeks <= MIN_OFFSET_WEEKS}
           aria-label={t('quota_management.windows_prev')}
           title={t('quota_management.windows_prev')}
         >
@@ -307,7 +310,7 @@ export function QuotaPoolPanel({
           type="button"
           className={styles.todayButton}
           onClick={() => onSettingsChange({ offsetWeeks: 0 })}
-          aria-pressed={settings.offsetWeeks === 0}
+          data-current={settings.offsetWeeks === 0 ? 'true' : 'false'}
         >
           {t('quota_management.windows_today')}
         </button>

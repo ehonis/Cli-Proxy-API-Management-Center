@@ -61,3 +61,17 @@ export const formatStamp = (ms: number, locale?: string) =>
     hour: 'numeric',
     minute: '2-digit',
   });
+
+
+/** Runway reset: "Thu 9:06 PM" within the week, "Tue 11/10" beyond, always short. */
+export const formatResetCompact = (ms: number, now: number, locale?: string) => {
+  const date = new Date(ms);
+  const weekday = date.toLocaleDateString(locale, { weekday: 'short' });
+  if (Math.abs(ms - now) < 6 * DAY_MS) return `${weekday} ${formatClock(ms, locale)}`;
+  return `${weekday} ${date.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' })}`;
+};
+
+/** Band opacity for account `index` of `count`, spread so no two bands match. */
+export function bandOpacity(index: number, count: number) {
+  return count <= 1 ? 0.6 : 0.2 + (0.6 * index) / (count - 1);
+}

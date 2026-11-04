@@ -1639,7 +1639,6 @@
     "pool_legend_rate": "Скорость расхода",
     "pool_legend_recorded": "Записано",
     "pool_legend_projected": "Прогноз",
-    "pool_legend_accounts": "Полосы — аккаунты, друг над другом",
     "ledger_in": "через {{duration}}",
     "ledger_of_pool": "из {{total}} пула",
     "ledger_collapse": "Свернуть",
@@ -1652,7 +1651,8 @@
     "ledger_runway_empty": "Иссякнет через {{duration}}",
     "ledger_resets_at": "Сброс {{when}}",
     "ledger_just_now": "только что",
-    "ledger_ago": "{{duration}} назад"
+    "ledger_ago": "{{duration}} назад",
+    "ledger_runway_empty_now": "Исчерпан"
   },
   "plugin_management": {
     "title": "Управление плагинами",

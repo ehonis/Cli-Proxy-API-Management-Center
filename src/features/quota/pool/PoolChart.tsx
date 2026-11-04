@@ -10,7 +10,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DAY_MS, HOUR_MS, type PoolModel, type SeriesPoint } from './poolModel';
-import { formatPercent, formatRate, formatStamp } from './poolFormat';
+import { bandOpacity, formatPercent, formatRate, formatStamp } from './poolFormat';
 import styles from './PoolChart.module.scss';
 
 export type PoolChartMode = 'remaining' | 'rate';
@@ -37,7 +37,8 @@ const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 &
 function niceCeil(value: number) {
   if (value <= 1) return 1;
   const exp = 10 ** Math.floor(Math.log10(value));
-  for (const step of [1, 2, 2.5, 5, 10]) {
+  // Steps whose half is still a round tick label.
+  for (const step of [1, 2, 4, 5, 10]) {
     if (step * exp >= value) return step * exp;
   }
   return 10 * exp;
@@ -168,6 +169,10 @@ export function PoolChart({
       if (v === null) continue;
       const cx = x(reset.t);
       const lineY = y(v);
+      // The Now label and dot own the space around the present moment.
+      if (now >= startMs && now <= endMs && Math.abs(cx - x(now)) < 24 && lineY < M.top + 40) {
+        continue;
+      }
       // Above the line first, then tucked under it, then further up.
       const candidates = [lineY - 12, lineY + 20, lineY - 30, lineY + 38];
       let chosen: number | null = null;
@@ -192,7 +197,7 @@ export function PoolChart({
     return out;
     // x/y depend on width and yMax, both captured via plotW/yMax.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rateMode, model, startMs, endMs, plotW, yMax, locale]);
+  }, [rateMode, model, startMs, endMs, plotW, yMax, locale, now]);
 
   /* ---------- axes ---------- */
 
@@ -338,7 +343,7 @@ export function PoolChart({
         <g clipPath={`url(#${clipId})`}>
           {bands.length > 0 ? (
             bands.map((band, index) => (
-              <g key={band.key} style={{ opacity: 0.18 + 0.5 * ((index % 3) / 2) }}>
+              <g key={band.key} style={{ opacity: bandOpacity(index, bands.length) }}>
                 <path className={styles.band} d={bandPath(band.recorded)} />
                 <path className={`${styles.band} ${styles.bandProjected}`} d={bandPath(band.projected)} />
               </g>

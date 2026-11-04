@@ -62,6 +62,14 @@ export function useQuotaHistory(enabled: boolean) {
 }
 
 /**
+ * When each quota result landed, keyed by the result object itself. Module
+ * scoped so leaving the page and coming back keeps the real age ("14m ago")
+ * instead of stamping everything "just now" again, and so each result is
+ * reported to the server once.
+ */
+const landedAt = new WeakMap<QuotaCardState, number>();
+
+/**
  * Remembers when each credential's quota last landed, and reports that fresh
  * reading to the server as an "active" history sample so accounts that carry
  * no traffic still get recorded points.
@@ -72,29 +80,32 @@ export function useQuotaFetchTimes(
   historySupported: boolean,
   onRecorded: () => void
 ) {
-  const seenRef = useRef(new Map<string, QuotaCardState>());
-  const [fetchedAt, setFetchedAt] = useState<Record<string, number>>({});
+  const [, setVersion] = useState(0);
 
   useEffect(() => {
-    const fresh: Record<string, number> = {};
-    let posted = false;
+    const posts: Promise<unknown>[] = [];
+    let fresh = false;
     for (const entry of entries) {
-      const key = getQuotaCacheKey(entry.file);
       const quota = quotaFor(entry);
-      if (!quota || quota.status !== 'success') continue;
-      if (seenRef.current.get(key) === quota) continue;
-      seenRef.current.set(key, quota);
-      fresh[key] = Date.now();
+      if (!quota || quota.status !== 'success' || landedAt.has(quota)) continue;
+      landedAt.set(quota, Date.now());
+      fresh = true;
       if (!historySupported || !isPoolProvider(entry.type)) continue;
       const authIndex = normalizeAuthIndex(entry.file.auth_index ?? entry.file.authIndex);
       const windows = historyWindowsFromQuota(entry.type, quota);
       if (!authIndex || !windows) continue;
-      posted = true;
-      void quotaHistoryApi.record(authIndex, entry.type, windows).catch(() => {});
+      posts.push(quotaHistoryApi.record(authIndex, entry.type, windows));
     }
-    if (Object.keys(fresh).length > 0) setFetchedAt((prev) => ({ ...prev, ...fresh }));
-    if (posted) onRecorded();
+    if (fresh) setVersion((v) => v + 1);
+    // Reload once every POST has settled, so the new points are in the reply.
+    if (posts.length > 0) void Promise.allSettled(posts).then(onRecorded);
   }, [entries, quotaFor, historySupported, onRecorded]);
 
+  const fetchedAt: Record<string, number> = {};
+  for (const entry of entries) {
+    const quota = quotaFor(entry);
+    const at = quota ? landedAt.get(quota) : undefined;
+    if (at !== undefined) fetchedAt[getQuotaCacheKey(entry.file)] = at;
+  }
   return fetchedAt;
 }

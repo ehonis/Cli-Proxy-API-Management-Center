@@ -36,6 +36,7 @@
 }
 
 .toolbar {
+  scroll-margin-top: calc(var(--floating-control-size, 44px) + 32px);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -51,8 +52,8 @@
   flex: 1 1 320px;
   min-width: 0;
   height: 44px;
-  border: 1px solid var(--pool-border);
-  border-radius: 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   background: var(--pool-surface);
   color: var(--text-tertiary);
 
@@ -126,8 +127,8 @@
   button[aria-haspopup='listbox'] {
     height: 44px;
     padding-left: 14px;
-    border: 1px solid var(--pool-border);
-    border-radius: 12px;
+    border: 1px solid transparent;
+    border-radius: 11px;
     background: var(--pool-surface);
     box-shadow: none;
     color: var(--text-secondary);

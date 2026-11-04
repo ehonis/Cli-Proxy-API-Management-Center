@@ -8,9 +8,10 @@
 .group {
   min-width: 0;
   padding: 6px 24px 8px;
-  border: 1px solid var(--pool-border);
+  border: 1px solid var(--pool-card-border);
   border-radius: 16px;
   background: var(--pool-surface);
+  container-type: inline-size;
 }
 
 .groupHead {
@@ -117,9 +118,9 @@
 .row {
   display: grid;
   grid-template-columns:
-    minmax(150px, 1.15fr)
-    repeat(var(--ledger-cols, 3), minmax(120px, 1fr))
-    minmax(150px, auto);
+    minmax(120px, 1.15fr)
+    repeat(var(--ledger-cols, 3), minmax(96px, 1fr))
+    minmax(130px, auto);
   column-gap: 24px;
   align-items: center;
 }
@@ -222,7 +223,7 @@
 }
 
 .bar {
-  height: 4px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--ledger-track);
@@ -348,7 +349,7 @@
 
   &:disabled {
     cursor: default;
-    opacity: 0.55;
+    opacity: 0.75;
   }
 
   &:focus-visible {
@@ -393,10 +394,20 @@
 
 /* ---------- narrow screens: rows become stacked cards ---------- */
 
+@container (max-width: 1000px) {
+  .headRow,
+  .row {
+    column-gap: 16px;
+  }
+}
+
 @media (max-width: 900px) {
   .group {
     padding: 4px 14px 6px;
   }
+}
+
+@container (max-width: 720px) {
 
   .headRow {
     display: none;

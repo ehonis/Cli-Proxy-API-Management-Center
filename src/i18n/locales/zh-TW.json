@@ -1660,7 +1660,6 @@
     "pool_legend_rate": "消耗速率",
     "pool_legend_recorded": "已記錄",
     "pool_legend_projected": "預測",
-    "pool_legend_accounts": "色帶為各帳號堆疊",
     "ledger_in": "{{duration}} 後",
     "ledger_of_pool": "/ {{total}} 額度池",
     "ledger_collapse": "收合",
@@ -1673,7 +1672,8 @@
     "ledger_runway_empty": "{{duration}} 後耗盡",
     "ledger_resets_at": "{{when}} 重置",
     "ledger_just_now": "剛剛",
-    "ledger_ago": "{{duration}} 前"
+    "ledger_ago": "{{duration}} 前",
+    "ledger_runway_empty_now": "已耗盡"
   },
   "plugin_management": {
     "title": "插件管理",

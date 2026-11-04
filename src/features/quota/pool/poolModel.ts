@@ -194,7 +194,6 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
   const accounts = inputs.filter((a) => a.remaining !== null || a.samples.length > 0);
   const capacity = accounts.length * 100;
   const tracks = new Map(accounts.map((a) => [a.key, buildAccountTrack(a, now)]));
-  const live = accounts.filter((a) => a.remaining !== null);
   const current = accounts.length
     ? accounts.reduce((sum, a) => sum + (trackValueAt(tracks.get(a.key) ?? [], now) ?? 0), 0)
     : null;
@@ -237,46 +236,50 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
     v: accounts.reduce((sum, a) => sum + recordedByAccount[a.key][i], 0),
   }));
 
-  // Rolling burn: consumption summed over the window ending at each point.
-  const windowSteps = Math.max(1, Math.round((burnWindowHours * HOUR_MS) / STEP_MS));
+  // Rolling burn over the window ending at each point, divided by the time
+  // the window actually covers, so the last (partial) step and the headline
+  // burn figure agree exactly.
+  const windowMs = burnWindowHours * HOUR_MS;
   const recordedRate: SeriesPoint[] = [];
   let rolling = 0;
+  let tail = 0;
   for (let i = 0; i < recordedTimes.length; i += 1) {
     rolling += consumption[i];
-    if (i - windowSteps >= 0) rolling -= consumption[i - windowSteps];
-    const covered = Math.min(i, windowSteps) * STEP_MS;
+    while (tail < i && recordedTimes[i] - recordedTimes[tail] > windowMs) {
+      tail += 1;
+      rolling -= consumption[tail];
+    }
+    const covered = recordedTimes[i] - recordedTimes[tail];
     recordedRate.push({
       t: recordedTimes[i],
       v: covered >= 15 * MINUTE_MS ? Math.max(0, rolling) / (covered / HOUR_MS) : 0,
     });
   }
-
-  const burnFrom = now - burnWindowHours * HOUR_MS;
-  let burned = 0;
-  let coveredMs = 0;
-  for (let i = 1; i < recordedTimes.length; i += 1) {
-    if (recordedTimes[i] <= burnFrom) continue;
-    burned += consumption[i];
-    coveredMs += recordedTimes[i] - recordedTimes[i - 1];
-  }
-  const burnPerHour = coveredMs >= 15 * MINUTE_MS ? burned / (coveredMs / HOUR_MS) : null;
+  const lastCovered =
+    recordedTimes.length > 1 ? recordedTimes[recordedTimes.length - 1] - recordedTimes[tail] : 0;
+  const burnPerHour =
+    lastCovered >= 15 * MINUTE_MS ? recordedRate[recordedRate.length - 1].v : null;
 
   /* ---------- projected ---------- */
 
-  const state = live.map((a) => ({
+  // Unloaded accounts still refill at their recorded reset; they just carry
+  // no projected usage, since nothing says they are being used.
+  const lastRecordedReset = (a: PoolAccountInput) => {
+    let latest: PoolSamplePoint | null = null;
+    for (const sample of a.samples) if (!latest || sample.t > latest.t) latest = sample;
+    return latest?.resetAtMs ?? null;
+  };
+  const state = accounts.map((a) => ({
     key: a.key,
     label: a.label,
+    live: a.remaining !== null,
     remaining: trackValueAt(tracks.get(a.key) ?? [], now) ?? 0,
-    resetAtMs: a.resetAtMs,
+    resetAtMs: a.remaining !== null ? a.resetAtMs : lastRecordedReset(a),
     periodMs: a.periodMs,
   }));
   for (const s of state) {
     while (s.resetAtMs !== null && s.resetAtMs <= now) s.resetAtMs += s.periodMs;
   }
-  const stale = accounts.filter((a) => a.remaining === null);
-  const staleValues = new Map(
-    stale.map((a) => [a.key, trackValueAt(tracks.get(a.key) ?? [], now) ?? 0])
-  );
 
   const rate = (burnPerHour ?? 0) * Math.max(0, futureFactor);
   const projectedTimes: number[] = [now];
@@ -286,14 +289,14 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
 
   const projectedByAccount: Record<string, number[]> = {};
   for (const a of accounts) projectedByAccount[a.key] = [];
+  const projectedRates: number[] = [];
   const projectedRises: { t: number; delta: number; label: string }[] = [];
-  const emptyAt = new Map<string, number>();
   const nextResetByKey = new Map(state.map((s) => [s.key, s.resetAtMs]));
   let poolEmptyAtMs: number | null = null;
   let firstEmpty: PoolModel['firstEmpty'] = null;
 
   const order = () => {
-    const active = state.filter((s) => s.remaining > EMPTY_EPSILON);
+    const active = state.filter((s) => s.live && s.remaining > EMPTY_EPSILON);
     if (strategy === 'soonest-reset') {
       active.sort(
         (a, b) =>
@@ -308,9 +311,11 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
 
   for (let i = 0; i < projectedTimes.length; i += 1) {
     const t = projectedTimes[i];
+    let consumed: number;
     if (i > 0) {
       const dtHours = (t - projectedTimes[i - 1]) / HOUR_MS;
-      let need = rate * dtHours;
+      const wanted = rate * dtHours;
+      let need = wanted;
       if (need > 0) {
         const active = order();
         if (strategy === 'round-robin' && active.length > 0) {
@@ -335,31 +340,31 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
           }
         }
       }
+      consumed = (wanted - Math.max(0, need)) / dtHours;
       for (const s of state) {
-        if (s.remaining <= EMPTY_EPSILON && !emptyAt.has(s.key)) {
-          emptyAt.set(s.key, t);
-          if (!firstEmpty) firstEmpty = { key: s.key, label: s.label, t };
-        }
         while (s.resetAtMs !== null && s.resetAtMs <= t) {
           const delta = 100 - s.remaining;
           if (delta > 0) projectedRises.push({ t: s.resetAtMs, delta, label: s.label });
           s.remaining = 100;
           s.resetAtMs += s.periodMs;
-          emptyAt.delete(s.key);
         }
       }
+    } else {
+      consumed = rate;
+    }
+    // Checked from the first step, so an account already at zero reads as
+    // empty now rather than "in five minutes".
+    if (!firstEmpty && t <= horizonEndMs) {
+      const dry = state.find((s) => s.live && s.remaining <= EMPTY_EPSILON);
+      if (dry) firstEmpty = { key: dry.key, label: dry.label, t };
     }
     let total = 0;
     for (const s of state) {
       projectedByAccount[s.key].push(s.remaining);
       total += s.remaining;
     }
-    for (const a of stale) {
-      const v = staleValues.get(a.key) ?? 0;
-      projectedByAccount[a.key].push(v);
-      total += v;
-    }
-    if (i > 0 && poolEmptyAtMs === null && total <= EMPTY_EPSILON && t <= horizonEndMs) {
+    projectedRates.push(total <= EMPTY_EPSILON ? 0 : consumed);
+    if (poolEmptyAtMs === null && total <= EMPTY_EPSILON && t <= horizonEndMs) {
       poolEmptyAtMs = t;
     }
   }
@@ -368,10 +373,7 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
     t,
     v: accounts.reduce((sum, a) => sum + (projectedByAccount[a.key][i] ?? 0), 0),
   }));
-  const projectedRate = [
-    { t: now, v: rate },
-    { t: projectEnd, v: rate },
-  ];
+  const projectedRate = projectedTimes.map((t, i) => ({ t, v: projectedRates[i] }));
 
   const resets = [
     ...clusterResets(recordedRises, false),
@@ -379,9 +381,6 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
   ];
   const nextReset = resets.find((r) => r.projected && r.t > now) ?? null;
 
-  // An account "runs dry" only if that happens before its own next reset.
-  const firstEmptyBeforeReset =
-    firstEmpty && firstEmpty.t <= horizonEndMs ? firstEmpty : null;
 
   return {
     capacity,
@@ -397,23 +396,23 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
     projectedRate,
     resets,
     poolEmptyAtMs,
-    firstEmpty: firstEmptyBeforeReset,
+    firstEmpty,
     nextReset,
     horizonEndMs,
     accounts: accounts.map((a) => ({
       key: a.key,
       label: a.label,
-      emptyAtMs: projectedEmptyFor(projectedTimes, projectedByAccount[a.key]),
+      emptyAtMs: projectedEmptyFor(projectedTimes, projectedByAccount[a.key], horizonEndMs),
       nextResetMs: nextResetByKey.get(a.key) ?? null,
     })),
   };
 }
 
-/** First projected time an account sits at zero, within the horizon. */
-function projectedEmptyFor(times: number[], values: number[] | undefined) {
+/** First projected time an account sits at zero (now, if it already does), within the horizon. */
+function projectedEmptyFor(times: number[], values: number[] | undefined, horizonEndMs: number) {
   if (!values) return null;
-  for (let i = 1; i < values.length; i += 1) {
-    if (values[i] <= EMPTY_EPSILON && values[i - 1] > EMPTY_EPSILON) return times[i];
+  for (let i = 0; i < values.length && times[i] <= horizonEndMs; i += 1) {
+    if (values[i] <= EMPTY_EPSILON) return times[i];
   }
   return null;
 }

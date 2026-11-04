@@ -1634,7 +1634,6 @@
     "pool_legend_rate": "消耗速率",
     "pool_legend_recorded": "已记录",
     "pool_legend_projected": "预测",
-    "pool_legend_accounts": "色带为各账号堆叠",
     "ledger_in": "{{duration}} 后",
     "ledger_of_pool": "/ {{total}} 额度池",
     "ledger_collapse": "收起",
@@ -1647,7 +1646,8 @@
     "ledger_runway_empty": "{{duration}} 后耗尽",
     "ledger_resets_at": "{{when}} 重置",
     "ledger_just_now": "刚刚",
-    "ledger_ago": "{{duration}} 前"
+    "ledger_ago": "{{duration}} 前",
+    "ledger_runway_empty_now": "已耗尽"
   },
   "plugin_management": {
     "title": "插件管理",

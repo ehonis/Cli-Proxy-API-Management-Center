@@ -26,6 +26,7 @@ import { credentialLabel } from '../pool/poolInputs';
 import {
   formatDuration,
   formatPercent,
+  formatResetCompact,
   formatResetInstant,
   formatWhen,
 } from '../pool/poolFormat';
@@ -147,21 +148,24 @@ function RunwayCell({ pool, rowKey, now }: { pool: PoolModel; rowKey: string; no
       <span className={styles.cellLabel}>{t('quota_management.ledger_runway')}</span>
       {account.emptyAtMs !== null ? (
         <div className={runsDry ? styles.runwayWarn : styles.runwayMain}>
-          {t('quota_management.ledger_runway_empty', {
-            duration: formatDuration(account.emptyAtMs - now),
-          })}
+          {account.emptyAtMs <= now
+            ? t('quota_management.ledger_runway_empty_now')
+            : t('quota_management.ledger_runway_empty', {
+                duration: formatDuration(account.emptyAtMs - now),
+              })}
         </div>
       ) : (
         <div className={styles.runwayMain}>
           {t('quota_management.ledger_runway_over', {
-            count: Math.floor((pool.horizonEndMs - now) / DAY_MS),
+            // "Over 13 days" for a 14-day horizon: strictly less than what was simulated.
+            count: Math.max(1, Math.ceil((pool.horizonEndMs - now) / DAY_MS) - 1),
           })}
         </div>
       )}
       <div className={styles.runwaySub}>
         {account.nextResetMs !== null
           ? t('quota_management.ledger_resets_at', {
-              when: formatWhen(account.nextResetMs, now, locale),
+              when: formatResetCompact(account.nextResetMs, now, locale),
             })
           : t('quota_management.ledger_no_reset')}
       </div>

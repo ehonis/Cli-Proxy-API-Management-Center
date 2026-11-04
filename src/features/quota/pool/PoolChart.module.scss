@@ -37,12 +37,12 @@
 .yLabel,
 .xLabel {
   fill: var(--text-tertiary);
-  font-size: 12px;
+  font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .xLabel {
-  font-size: 12.5px;
+  fill: var(--text-secondary);
 }
 
 .xLabelToday {

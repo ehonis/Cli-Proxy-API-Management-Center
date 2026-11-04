@@ -143,6 +143,7 @@
 .pill {
   gap: 6px;
   border-bottom: 0;
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
 
   .tab {
     gap: 9px;

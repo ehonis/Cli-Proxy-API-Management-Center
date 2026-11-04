@@ -1636,7 +1636,6 @@
     "pool_legend_rate": "Drain rate",
     "pool_legend_recorded": "Recorded",
     "pool_legend_projected": "Projected",
-    "pool_legend_accounts": "Bands are accounts, stacked",
     "ledger_in": "in {{duration}}",
     "ledger_of_pool": "of {{total}} pool",
     "ledger_collapse": "Collapse",
@@ -1649,7 +1648,8 @@
     "ledger_runway_empty": "Empty in {{duration}}",
     "ledger_resets_at": "Resets {{when}}",
     "ledger_just_now": "just now",
-    "ledger_ago": "{{duration}} ago"
+    "ledger_ago": "{{duration}} ago",
+    "ledger_runway_empty_now": "Empty now"
   },
   "plugin_management": {
     "title": "Plugin Management",

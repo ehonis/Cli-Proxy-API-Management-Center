@@ -94,6 +94,7 @@
   // Quota pool + ledger surfaces
   --pool-surface: var(--bg-primary);
   --pool-border: var(--border-color);
+  --pool-card-border: var(--border-color);
   --pool-control-bg: var(--bg-tertiary);
   --pool-control-active: var(--bg-primary);
   --pool-grid: rgba(0, 0, 0, 0.06);
@@ -259,8 +260,9 @@
   --ledger-bar: #f4f4f5;
 
   // Quota pool surfaces
-  --pool-surface: #0c0c0d;
+  --pool-surface: #0e0e10;
   --pool-border: #1d1d20;
+  --pool-card-border: rgba(255, 255, 255, 0.035);
   --pool-control-bg: #161618;
   --pool-control-active: #2a2a2e;
   --pool-grid: rgba(255, 255, 255, 0.05);

@@ -22,27 +22,27 @@
 
 .controlLabel {
   color: var(--text-tertiary);
-  font-size: 13.5px;
+  font-size: 14.5px;
   white-space: nowrap;
 }
 
 .segmented {
   display: inline-flex;
   gap: 2px;
-  padding: 3px;
-  border-radius: 10px;
+  padding: 4px;
+  border-radius: 11px;
   background: var(--pool-control-bg);
 }
 
 .segment {
-  height: 30px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 14px;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -50,7 +50,7 @@
     background-color 150ms ease,
     color 150ms ease;
 
-  &[aria-checked='true'] {
+  &[aria-pressed='true'] {
     background: var(--pool-control-active);
     color: var(--text-primary);
   }
@@ -61,7 +61,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    &:hover:not([aria-checked='true']) {
+    &:hover:not([aria-pressed='true']) {
       color: var(--text-primary);
     }
   }
@@ -71,27 +71,27 @@
   min-width: 150px;
 
   button[aria-haspopup='listbox'] {
-    height: 36px;
-    padding-left: 14px;
+    height: 44px;
+    padding-left: 16px;
     border: 0;
-    border-radius: 10px;
+    border-radius: 11px;
     background: var(--pool-control-bg);
     box-shadow: none;
     color: var(--text-primary);
-    font-size: 13.5px;
+    font-size: 14.5px;
     font-weight: 500;
   }
 }
 
 .toggle {
-  height: 36px;
-  padding: 0 16px;
+  height: 44px;
+  padding: 0 18px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--pool-control-bg);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 500;
   cursor: pointer;
 
@@ -125,7 +125,7 @@
 .rangeText {
   margin-right: 10px;
   color: var(--text-tertiary);
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -134,9 +134,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 34px;
+  height: 42px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
@@ -147,8 +147,13 @@
     outline-offset: 1px;
   }
 
+  &:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+
   @media (hover: hover) and (pointer: fine) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--pool-control-bg);
       color: var(--text-primary);
     }
@@ -156,7 +161,7 @@
 }
 
 .navButton {
-  width: 34px;
+  width: 40px;
 }
 
 .navNext svg {
@@ -164,13 +169,13 @@
 }
 
 .todayButton {
-  padding: 0 16px;
+  padding: 0 18px;
   background: var(--pool-control-bg);
   color: var(--text-primary);
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 500;
 
-  &[aria-pressed='false'] {
+  &[data-current='false'] {
     color: var(--text-secondary);
   }
 }
@@ -184,9 +189,10 @@
   gap: 8px;
   min-width: 0;
   padding: 24px 24px 18px;
-  border: 1px solid var(--pool-border);
+  border: 1px solid var(--pool-card-border);
   border-radius: 16px;
   background: var(--pool-surface);
+  container-type: inline-size;
 }
 
 .cardHead {
@@ -260,7 +266,7 @@
 .stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, auto));
-  gap: 6px 44px;
+  gap: 6px 36px;
   margin: 0 0 6px;
 }
 
@@ -327,13 +333,22 @@
   border-top-style: dashed;
 }
 
+.swatchBand {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--pool-accent);
+}
+
 .legendNote {
   color: var(--text-tertiary);
 }
 
-@media (max-width: 1100px) {
+@container (max-width: 720px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, auto));
+    gap: 6px 32px;
   }
 }
 

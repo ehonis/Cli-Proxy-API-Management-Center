@@ -51,12 +51,8 @@ import { useQuotaActions } from './hooks/useQuotaActions';
 import { useQuotaBatchLoader } from './hooks/useQuotaBatchLoader';
 import { readQuotaUiState, writeQuotaUiState, type QuotaViewMode } from './uiState';
 import { QuotaLedger } from './ledger/QuotaLedger';
-import {
-  FUTURE_FACTOR,
-  QuotaPoolPanel,
-  type PoolCardData,
-  type PoolSettings,
-} from './pool/QuotaPoolPanel';
+import { QuotaPoolPanel, type PoolCardData } from './pool/QuotaPoolPanel';
+import { FUTURE_FACTOR, type PoolSettings } from './pool/poolSettings';
 import { buildPoolModel, poolViewRange, type RoutingStrategy } from './pool/poolModel';
 import { POOL_PROVIDERS, poolInputsFor, samplesByAuthIndex } from './pool/poolInputs';
 import { useQuotaFetchTimes, useQuotaHistory } from './pool/usePoolData';
@@ -381,14 +377,14 @@ export function QuotaPage() {
   const history = useQuotaHistory(!disableControls);
   const reloadHistory = history.reload;
   const historyReloadTimer = useRef<number | null>(null);
-  // Active samples are POSTed as fetches land; give them a moment to be
-  // written, then pull the history once for the whole batch.
+  // Active samples are POSTed as fetches land; once a batch's POSTs settle,
+  // coalesce the reloads into one.
   const scheduleHistoryReload = useCallback(() => {
     if (historyReloadTimer.current !== null) window.clearTimeout(historyReloadTimer.current);
     historyReloadTimer.current = window.setTimeout(() => {
       historyReloadTimer.current = null;
       void reloadHistory();
-    }, 2500);
+    }, 400);
   }, [reloadHistory]);
   useEffect(
     () => () => {
@@ -433,7 +429,8 @@ export function QuotaPage() {
             now,
             burnWindowHours: poolSettings.burnWindow,
             futureFactor: FUTURE_FACTOR[poolSettings.future],
-            recordedFromMs: range.startMs,
+            // Paging forward must not starve the burn rate of recorded history.
+            recordedFromMs: Math.min(range.startMs, now),
             projectToMs: range.endMs,
             strategy,
           }),
