@@ -53,7 +53,7 @@ import { readQuotaUiState, writeQuotaUiState, type QuotaViewMode } from './uiSta
 import { QuotaLedger } from './ledger/QuotaLedger';
 import { QuotaPoolPanel, type PoolCardData } from './pool/QuotaPoolPanel';
 import { FUTURE_FACTOR, type PoolSettings } from './pool/poolSettings';
-import { buildPoolModel, poolViewRange, type RoutingStrategy } from './pool/poolModel';
+import { buildPoolModel, DAY_MS, poolViewRange, type RoutingStrategy } from './pool/poolModel';
 import { POOL_PROVIDERS, poolInputsFor, samplesByAuthIndex } from './pool/poolInputs';
 import { useQuotaFetchTimes, useQuotaHistory } from './pool/usePoolData';
 import styles from './QuotaPage.module.scss';
@@ -83,7 +83,8 @@ export function QuotaPage() {
   const [poolSettings, setPoolSettings] = useState<PoolSettings>(() => {
     const saved = readQuotaUiState()?.pool;
     return {
-      mode: saved?.mode ?? 'remaining',
+      // Always open on Remaining, like a fresh look at the pool.
+      mode: 'remaining',
       burnWindow: saved?.burnWindow ?? 3,
       future: saved?.future ?? 'same',
       showAccounts: saved?.showAccounts ?? false,
@@ -395,7 +396,7 @@ export function QuotaPage() {
   const fetchedAt = useQuotaFetchTimes(
     entries,
     getQuota,
-    history.status === 'ready' || history.status === 'loading',
+    history.status === 'ready',
     scheduleHistoryReload
   );
   const fetchedAtFor = useCallback(
@@ -431,7 +432,7 @@ export function QuotaPage() {
             futureFactor: FUTURE_FACTOR[poolSettings.future],
             // Paging forward must not starve the burn rate of recorded history.
             recordedFromMs: Math.min(range.startMs, now),
-            projectToMs: range.endMs,
+            projectToMs: Math.min(range.endMs, now + 21 * DAY_MS),
             strategy,
           }),
         }))
@@ -459,7 +460,6 @@ export function QuotaPage() {
       const next = { ...prev, ...patch };
       writeQuotaUiState({
         pool: {
-          mode: next.mode,
           burnWindow: next.burnWindow,
           future: next.future,
           showAccounts: next.showAccounts,

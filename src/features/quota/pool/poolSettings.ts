@@ -5,6 +5,8 @@ import type { PoolChartMode } from './PoolChart';
 export const BURN_WINDOWS = [1, 3, 6] as const;
 /** The server keeps 21 days of history; two weeks back still shows some of it. */
 export const MIN_OFFSET_WEEKS = -2;
+/** Beyond a week ahead the projection is only a repeating sawtooth. */
+export const MAX_OFFSET_WEEKS = 1;
 export type BurnWindow = (typeof BURN_WINDOWS)[number];
 
 export const FUTURE_USAGE = ['same', 'double', 'half', 'none'] as const;

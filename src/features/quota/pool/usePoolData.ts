@@ -68,6 +68,8 @@ export function useQuotaHistory(enabled: boolean) {
  * reported to the server once.
  */
 const landedAt = new WeakMap<QuotaCardState, number>();
+/** Results already reported to the server as active samples. */
+const posted = new WeakSet<QuotaCardState>();
 
 /**
  * Remembers when each credential's quota last landed, and reports that fresh
@@ -87,13 +89,18 @@ export function useQuotaFetchTimes(
     let fresh = false;
     for (const entry of entries) {
       const quota = quotaFor(entry);
-      if (!quota || quota.status !== 'success' || landedAt.has(quota)) continue;
-      landedAt.set(quota, Date.now());
-      fresh = true;
-      if (!historySupported || !isPoolProvider(entry.type)) continue;
+      if (!quota || quota.status !== 'success') continue;
+      if (!landedAt.has(quota)) {
+        landedAt.set(quota, Date.now());
+        fresh = true;
+      }
+      // Only report once the endpoint is known to exist; results that landed
+      // earlier are sent as soon as it is.
+      if (!historySupported || posted.has(quota) || !isPoolProvider(entry.type)) continue;
       const authIndex = normalizeAuthIndex(entry.file.auth_index ?? entry.file.authIndex);
       const windows = historyWindowsFromQuota(entry.type, quota);
       if (!authIndex || !windows) continue;
+      posted.add(quota);
       posts.push(quotaHistoryApi.record(authIndex, entry.type, windows));
     }
     if (fresh) setVersion((v) => v + 1);

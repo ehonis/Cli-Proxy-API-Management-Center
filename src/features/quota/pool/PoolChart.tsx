@@ -232,7 +232,8 @@ export function PoolChart({
   }, [startMs, endMs, now, locale]);
 
   const yTicks = [0, yMax / 2, yMax];
-  const tickLabel = (v: number) => (rateMode ? formatRate(v) : formatPercent(v));
+  const tickLabel = (v: number) =>
+    rateMode ? (Number.isInteger(v) ? `${v}%/h` : formatRate(v)) : formatPercent(v);
 
   const nowVisible = now >= startMs && now <= endMs;
   const nowValue = rateMode ? (model.burnPerHour ?? 0) : (model.current ?? 0);

@@ -214,6 +214,47 @@ describe('pool model edge cases', () => {
   });
 });
 
+describe('partial loading', () => {
+  test('burn measured across all accounts is spent across all of them', () => {
+    const history = (key: string) =>
+      account({
+        key,
+        label: key,
+        remaining: null,
+        samples: [
+          { t: NOW - 3 * HOUR_MS, remaining: 90, resetAtMs: NOW + 150 * HOUR_MS },
+          { t: NOW - 60_000, remaining: 81, resetAtMs: NOW + 150 * HOUR_MS },
+        ],
+      });
+    const model = buildPoolModel(
+      [account({ key: 'live', remaining: 60, resetAtMs: NOW + 150 * HOUR_MS }), ...['b', 'c', 'd'].map(history)],
+      options
+    );
+    // ~9%/h in total. Soonest-reset ties break by key, so "b" drains first
+    // (81% / 9%/h ≈ 9h) instead of the one loaded account taking it all.
+    expect(model.burnPerHour).toBeCloseTo(9, 0);
+    expect(model.firstEmpty?.key).toBe('b');
+    expect(model.firstEmpty!.t).toBeGreaterThan(NOW + 8 * HOUR_MS);
+    expect(model.accounts.find((a) => a.key === 'live')?.emptyAtMs ?? Infinity).toBeGreaterThan(
+      model.firstEmpty!.t
+    );
+  });
+
+  test('a run-dry in a later weekly cycle is not "first empty"', () => {
+    const model = buildPoolModel(
+      [
+        account({
+          remaining: 100,
+          resetAtMs: NOW + 2 * HOUR_MS,
+          samples: [{ t: NOW - 3 * HOUR_MS, remaining: 100, resetAtMs: NOW + 2 * HOUR_MS }],
+        }),
+      ],
+      { ...options, futureFactor: 0 }
+    );
+    expect(model.firstEmpty).toBeNull();
+  });
+});
+
 describe('view range', () => {
   test('starts three days back at local midnight and spans fourteen calendar days', () => {
     const range = poolViewRange(NOW, 0);

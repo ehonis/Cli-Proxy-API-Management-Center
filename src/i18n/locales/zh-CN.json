@@ -1626,7 +1626,7 @@
     "pool_first_empty": "首个耗尽",
     "pool_none_before_reset": "重置前无",
     "pool_next_reset": "下次重置",
-    "pool_no_reset": "范围内无",
+    "pool_no_reset": "14 天内无",
     "pool_burn": "近 {{hours}} 小时消耗",
     "pool_now": "现在",
     "pool_no_data": "暂无记录。账号每次被使用或刷新时，服务器都会记录一个点。",

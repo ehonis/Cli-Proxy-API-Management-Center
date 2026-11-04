@@ -19,6 +19,7 @@ import { PoolChart, type PoolChartMode } from './PoolChart';
 import {
   BURN_WINDOWS,
   FUTURE_USAGE,
+  MAX_OFFSET_WEEKS,
   MIN_OFFSET_WEEKS,
   type BurnWindow,
   type FutureUsage,
@@ -285,7 +286,8 @@ export function QuotaPoolPanel({
         <button
           type="button"
           className={styles.toggle}
-          aria-pressed={settings.showAccounts}
+          aria-pressed={settings.showAccounts && settings.mode === 'remaining'}
+          disabled={settings.mode !== 'remaining'}
           onClick={() => onSettingsChange({ showAccounts: !settings.showAccounts })}
         >
           {t('quota_management.pool_accounts_toggle')}
@@ -318,6 +320,7 @@ export function QuotaPoolPanel({
           type="button"
           className={`${styles.navButton} ${styles.navNext}`}
           onClick={() => onSettingsChange({ offsetWeeks: settings.offsetWeeks + 1 })}
+          disabled={settings.offsetWeeks >= MAX_OFFSET_WEEKS}
           aria-label={t('quota_management.windows_next')}
           title={t('quota_management.windows_next')}
         >

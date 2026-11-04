@@ -272,7 +272,6 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
   const state = accounts.map((a) => ({
     key: a.key,
     label: a.label,
-    live: a.remaining !== null,
     remaining: trackValueAt(tracks.get(a.key) ?? [], now) ?? 0,
     resetAtMs: a.remaining !== null ? a.resetAtMs : lastRecordedReset(a),
     periodMs: a.periodMs,
@@ -296,7 +295,9 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
   let firstEmpty: PoolModel['firstEmpty'] = null;
 
   const order = () => {
-    const active = state.filter((s) => s.live && s.remaining > EMPTY_EPSILON);
+    // Every account with a known level is routable: the burn was measured
+    // across all of them, so it has to be spent across all of them too.
+    const active = state.filter((s) => s.remaining > EMPTY_EPSILON);
     if (strategy === 'soonest-reset') {
       active.sort(
         (a, b) =>
@@ -350,12 +351,19 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
         }
       }
     } else {
-      consumed = rate;
+      // Start the dashed line at the measured burn; any Future-usage factor
+      // shows as a step right after Now.
+      consumed = burnPerHour ?? 0;
     }
     // Checked from the first step, so an account already at zero reads as
     // empty now rather than "in five minutes".
+    // Only a run-dry before that account's own next reset counts; one in a
+    // later weekly cycle is a projection artefact, not a warning for now.
     if (!firstEmpty && t <= horizonEndMs) {
-      const dry = state.find((s) => s.live && s.remaining <= EMPTY_EPSILON);
+      const dry = state.find((s) => {
+        const reset = nextResetByKey.get(s.key);
+        return s.remaining <= EMPTY_EPSILON && (reset === null || reset === undefined || t < reset);
+      });
       if (dry) firstEmpty = { key: dry.key, label: dry.label, t };
     }
     let total = 0;
@@ -379,7 +387,8 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
     ...clusterResets(recordedRises, false),
     ...clusterResets(projectedRises, true),
   ];
-  const nextReset = resets.find((r) => r.projected && r.t > now) ?? null;
+  const nextReset =
+    resets.find((r) => r.projected && r.t > now && r.t <= horizonEndMs) ?? null;
 
 
   return {

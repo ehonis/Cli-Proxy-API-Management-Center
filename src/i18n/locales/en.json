@@ -1628,7 +1628,7 @@
     "pool_first_empty": "First empty",
     "pool_none_before_reset": "None before reset",
     "pool_next_reset": "Next reset",
-    "pool_no_reset": "None in range",
+    "pool_no_reset": "None within 14 days",
     "pool_burn": "Burn, last {{hours}}h",
     "pool_now": "Now",
     "pool_no_data": "No recorded history yet. The server records a point each time an account is used or refreshed.",

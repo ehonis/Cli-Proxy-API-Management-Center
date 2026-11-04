@@ -1652,7 +1652,7 @@
     "pool_first_empty": "首個耗盡",
     "pool_none_before_reset": "重置前無",
     "pool_next_reset": "下次重置",
-    "pool_no_reset": "範圍內無",
+    "pool_no_reset": "14 天內無",
     "pool_burn": "近 {{hours}} 小時消耗",
     "pool_now": "現在",
     "pool_no_data": "尚無記錄。帳號每次被使用或重新整理時，伺服器都會記錄一個點。",
