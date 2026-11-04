@@ -109,10 +109,7 @@ const clamp = (value: number) => Math.max(0, Math.min(100, value));
  * inside one window, a hold-then-jump at any reset that falls between them,
  * and an automatic jump to 100% at every reset after the last sample.
  */
-export function buildAccountTrack(
-  account: PoolAccountInput,
-  now: number
-): SeriesPoint[] {
+export function buildAccountTrack(account: PoolAccountInput, now: number): SeriesPoint[] {
   const points: PoolSamplePoint[] = account.samples
     .filter((s) => Number.isFinite(s.t) && Number.isFinite(s.remaining) && s.t <= now)
     .map((s) => ({ ...s, remaining: clamp(s.remaining) }));
@@ -383,13 +380,8 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
   }));
   const projectedRate = projectedTimes.map((t, i) => ({ t, v: projectedRates[i] }));
 
-  const resets = [
-    ...clusterResets(recordedRises, false),
-    ...clusterResets(projectedRises, true),
-  ];
-  const nextReset =
-    resets.find((r) => r.projected && r.t > now && r.t <= horizonEndMs) ?? null;
-
+  const resets = [...clusterResets(recordedRises, false), ...clusterResets(projectedRises, true)];
+  const nextReset = resets.find((r) => r.projected && r.t > now && r.t <= horizonEndMs) ?? null;
 
   return {
     capacity,

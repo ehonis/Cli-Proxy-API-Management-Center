@@ -3,9 +3,7 @@
 import { DAY_MS, HOUR_MS, MINUTE_MS } from './poolModel';
 
 export const formatPercent = (value: number | null | undefined) =>
-  value === null || value === undefined || !Number.isFinite(value)
-    ? '--'
-    : `${Math.round(value)}%`;
+  value === null || value === undefined || !Number.isFinite(value) ? '--' : `${Math.round(value)}%`;
 
 export const formatRate = (value: number | null | undefined) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return '--';
@@ -61,7 +59,6 @@ export const formatStamp = (ms: number, locale?: string) =>
     hour: 'numeric',
     minute: '2-digit',
   });
-
 
 /** Runway reset: "Thu 9:06 PM" within the week, "Tue 11/10" beyond, always short. */
 export const formatResetCompact = (ms: number, now: number, locale?: string) => {

@@ -26,13 +26,7 @@ import {
   type PoolSettings,
 } from './poolSettings';
 import { DAY_MS, type PoolModel } from './poolModel';
-import {
-  bandOpacity,
-  formatMonthDay,
-  formatPercent,
-  formatRate,
-  formatWhen,
-} from './poolFormat';
+import { bandOpacity, formatMonthDay, formatPercent, formatRate, formatWhen } from './poolFormat';
 import type { PoolProvider } from './poolInputs';
 import styles from './QuotaPoolPanel.module.scss';
 
@@ -43,7 +37,9 @@ export interface PoolCardData {
 
 export interface QuotaPoolPanelProps {
   settings: PoolSettings;
-  onSettingsChange: (patch: Partial<PoolSettings>) => void;
+  onSettingsChange: (
+    patch: Partial<PoolSettings> | ((prev: PoolSettings) => Partial<PoolSettings>)
+  ) => void;
   cards: PoolCardData[];
   range: { startMs: number; endMs: number };
   now: number;
@@ -288,7 +284,7 @@ export function QuotaPoolPanel({
           className={styles.toggle}
           aria-pressed={settings.showAccounts && settings.mode === 'remaining'}
           disabled={settings.mode !== 'remaining'}
-          onClick={() => onSettingsChange({ showAccounts: !settings.showAccounts })}
+          onClick={() => onSettingsChange((prev) => ({ showAccounts: !prev.showAccounts }))}
         >
           {t('quota_management.pool_accounts_toggle')}
         </button>
@@ -301,7 +297,7 @@ export function QuotaPoolPanel({
         <button
           type="button"
           className={styles.navButton}
-          onClick={() => onSettingsChange({ offsetWeeks: settings.offsetWeeks - 1 })}
+          onClick={() => onSettingsChange((prev) => ({ offsetWeeks: prev.offsetWeeks - 1 }))}
           disabled={settings.offsetWeeks <= MIN_OFFSET_WEEKS}
           aria-label={t('quota_management.windows_prev')}
           title={t('quota_management.windows_prev')}
@@ -319,7 +315,7 @@ export function QuotaPoolPanel({
         <button
           type="button"
           className={`${styles.navButton} ${styles.navNext}`}
-          onClick={() => onSettingsChange({ offsetWeeks: settings.offsetWeeks + 1 })}
+          onClick={() => onSettingsChange((prev) => ({ offsetWeeks: prev.offsetWeeks + 1 }))}
           disabled={settings.offsetWeeks >= MAX_OFFSET_WEEKS}
           aria-label={t('quota_management.windows_next')}
           title={t('quota_management.windows_next')}

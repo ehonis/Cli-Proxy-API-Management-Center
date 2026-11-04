@@ -101,7 +101,13 @@ export function useQuotaFetchTimes(
       const windows = historyWindowsFromQuota(entry.type, quota);
       if (!authIndex || !windows) continue;
       posted.add(quota);
-      posts.push(quotaHistoryApi.record(authIndex, entry.type, windows));
+      posts.push(
+        // Un-mark on failure so the next pass retries it.
+        quotaHistoryApi.record(authIndex, entry.type, windows).catch((err: unknown) => {
+          posted.delete(quota);
+          throw err;
+        })
+      );
     }
     if (fresh) setVersion((v) => v + 1);
     // Reload once every POST has settled, so the new points are in the reply.

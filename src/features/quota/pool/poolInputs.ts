@@ -37,7 +37,8 @@ function weeklyWindowFromQuota(
   const id = provider === 'claude' ? 'seven-day' : 'weekly';
   const window = windows?.find((w) => w.id === id);
   if (!window || typeof window.usedPercent !== 'number') return null;
-  const hours = typeof window.periodHours === 'number' && window.periodHours > 0 ? window.periodHours : 168;
+  const hours =
+    typeof window.periodHours === 'number' && window.periodHours > 0 ? window.periodHours : 168;
   return {
     usedPercent: window.usedPercent,
     resetAtMs: typeof window.resetAtMs === 'number' ? window.resetAtMs : null,
@@ -78,12 +79,10 @@ export function poolInputsFor(
   entries: QuotaFileEntry[],
   quotaFor: (entry: QuotaFileEntry) => QuotaCardState | undefined,
   history: Map<string, QuotaHistorySample[]>,
-  fetchedAt: (entry: QuotaFileEntry) => number | null,
-  excluded: ReadonlySet<string> = new Set()
+  fetchedAt: (entry: QuotaFileEntry) => number | null
 ): PoolAccountInput[] {
   return entries
     .filter((entry) => entry.type === provider && !entry.file.disabled)
-    .filter((entry) => !excluded.has(getQuotaCacheKey(entry.file)))
     .map((entry) => {
       const live = weeklyWindowFromQuota(provider, quotaFor(entry));
       const authIndex = normalizeAuthIndex(entry.file.auth_index ?? entry.file.authIndex);

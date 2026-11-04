@@ -426,15 +426,18 @@ export function QuotaPage() {
       POOL_PROVIDERS.filter((type) => tab === 'all' || tab === type)
         .map((type) => ({
           type,
-          model: buildPoolModel(poolInputsFor(type, entries, getQuota, historyByAuth, fetchedAtFor), {
-            now,
-            burnWindowHours: poolSettings.burnWindow,
-            futureFactor: FUTURE_FACTOR[poolSettings.future],
-            // Paging forward must not starve the burn rate of recorded history.
-            recordedFromMs: Math.min(range.startMs, now),
-            projectToMs: Math.min(range.endMs, now + 21 * DAY_MS),
-            strategy,
-          }),
+          model: buildPoolModel(
+            poolInputsFor(type, entries, getQuota, historyByAuth, fetchedAtFor),
+            {
+              now,
+              burnWindowHours: poolSettings.burnWindow,
+              futureFactor: FUTURE_FACTOR[poolSettings.future],
+              // Paging forward must not starve the burn rate of recorded history.
+              recordedFromMs: Math.min(range.startMs, now),
+              projectToMs: Math.min(range.endMs, now + 21 * DAY_MS),
+              strategy,
+            }
+          ),
         }))
         .filter((card) => card.model.accountCount > 0),
     [
@@ -455,19 +458,22 @@ export function QuotaPage() {
     [poolCards]
   );
 
-  const handlePoolSettingsChange = useCallback((patch: Partial<PoolSettings>) => {
-    setPoolSettings((prev) => {
-      const next = { ...prev, ...patch };
-      writeQuotaUiState({
-        pool: {
-          burnWindow: next.burnWindow,
-          future: next.future,
-          showAccounts: next.showAccounts,
-        },
+  const handlePoolSettingsChange = useCallback(
+    (patch: Partial<PoolSettings> | ((prev: PoolSettings) => Partial<PoolSettings>)) => {
+      setPoolSettings((prev) => {
+        const next = { ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) };
+        writeQuotaUiState({
+          pool: {
+            burnWindow: next.burnWindow,
+            future: next.future,
+            showAccounts: next.showAccounts,
+          },
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    []
+  );
 
   const handleToggleCollapsed = useCallback((type: string) => {
     setCollapsed((prev) => {
@@ -526,7 +532,8 @@ export function QuotaPage() {
           />
         </div>
 
-        {!loading && (
+        {/* Keep the last chart on screen while Refresh all reloads the list. */}
+        {(poolCards.length > 0 || !loading) && (
           <QuotaPoolPanel
             settings={poolSettings}
             onSettingsChange={handlePoolSettingsChange}
