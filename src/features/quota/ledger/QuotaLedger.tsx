@@ -78,7 +78,15 @@ function ProviderIcon({ type, resolvedTheme }: { type: string; resolvedTheme: Re
   );
 }
 
-function LimitCell({ col, label, now }: { col: LedgerColumn | undefined; label: string; now: number }) {
+function LimitCell({
+  col,
+  label,
+  now,
+}: {
+  col: LedgerColumn | undefined;
+  label: string;
+  now: number;
+}) {
   const { t, i18n } = useTranslation();
   if (!col) {
     return (
@@ -97,7 +105,8 @@ function LimitCell({ col, label, now }: { col: LedgerColumn | undefined; label: 
   const instant = hasReset ? formatResetInstant(col.resetAtMs!, i18n.resolvedLanguage) : null;
   // Without a countdown the bottom line says why, instead of crowding the top.
   const bottom =
-    instant ?? (fallback && col.remaining !== 100 ? fallback : t('quota_management.ledger_no_reset'));
+    instant ??
+    (fallback && col.remaining !== 100 ? fallback : t('quota_management.ledger_no_reset'));
   return (
     <div className={styles.cell} role="cell">
       <span className={styles.cellLabel}>{label}</span>
@@ -195,7 +204,8 @@ function ClaudeResetAction({
   return (
     <>
       <span className={styles.resetsLeft}>
-        {t('claude_reset.remaining')}: <b>{reset.count ?? '--'}</b>
+        <span className={styles.resetsLabel}>{t('claude_reset.remaining')}: </span>
+        <b title={t('claude_reset.remaining')}>{reset.count ?? '--'}</b>
       </span>
       <button
         type="button"
@@ -252,16 +262,15 @@ function LedgerRow({
   const label = credentialLabel(entry.file);
   const shownName = showEmails || !looksLikeEmail(label) ? label : maskCredentialName(label);
   const email = typeof entry.file.email === 'string' ? entry.file.email : '';
-  const updated =
-    loading
-      ? t('quota_management.ledger_loading')
-      : fetchedAt
-        ? now - fetchedAt < 60_000
-          ? t('quota_management.ledger_just_now')
-          : t('quota_management.ledger_ago', { duration: formatDuration(now - fetchedAt) })
-        : entry.file.disabled
-          ? t('quota_management.ledger_disabled')
-          : t('quota_management.ledger_not_loaded');
+  const updated = loading
+    ? t('quota_management.ledger_loading')
+    : fetchedAt
+      ? now - fetchedAt < 60_000
+        ? t('quota_management.ledger_just_now')
+        : t('quota_management.ledger_ago', { duration: formatDuration(now - fetchedAt) })
+      : entry.file.disabled
+        ? t('quota_management.ledger_disabled')
+        : t('quota_management.ledger_not_loaded');
 
   return (
     <div className={styles.row} role="row">
@@ -417,7 +426,9 @@ export function QuotaLedger({
                 aria-controls={bodyId}
                 onClick={() => onToggleCollapsed(group.type)}
               >
-                {isCollapsed ? t('quota_management.ledger_expand') : t('quota_management.ledger_collapse')}
+                {isCollapsed
+                  ? t('quota_management.ledger_expand')
+                  : t('quota_management.ledger_collapse')}
                 <IconChevronDown size={14} className={isCollapsed ? undefined : styles.chevronUp} />
               </button>
             </header>

@@ -350,6 +350,16 @@
   color: var(--text-tertiary);
 }
 
+@container (max-width: 860px) {
+  .stats {
+    gap: 6px 22px;
+  }
+
+  .cardBody {
+    column-gap: 20px;
+  }
+}
+
 @container (max-width: 720px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, auto));

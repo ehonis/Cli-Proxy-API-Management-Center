@@ -108,7 +108,11 @@ export function PoolChart({
 
   const yMax = useMemo(() => {
     if (!rateMode) return Math.max(100, model.capacity);
-    const peak = Math.max(0, ...model.recordedRate.map((p) => p.v), ...model.projectedRate.map((p) => p.v));
+    const peak = Math.max(
+      0,
+      ...model.recordedRate.map((p) => p.v),
+      ...model.projectedRate.map((p) => p.v)
+    );
     return niceCeil(peak * 1.25 || 1);
   }, [rateMode, model]);
   const y = (v: number) => M.top + (1 - Math.max(0, Math.min(v, yMax)) / yMax) * plotH;
@@ -118,7 +122,9 @@ export function PoolChart({
     return series.filter((p) => p.t >= startMs - pad && p.t <= endMs + pad);
   };
   const line = (series: SeriesPoint[]) =>
-    series.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+    series
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`)
+      .join('');
   const area = (series: SeriesPoint[]) =>
     series.length < 2
       ? ''
@@ -151,7 +157,9 @@ export function PoolChart({
     const pad = (span / plotW) * 4;
     const pts = band.filter((p) => p.t >= startMs - pad && p.t <= endMs + pad);
     if (pts.length < 2) return '';
-    const top = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.hi).toFixed(1)}`);
+    const top = pts.map(
+      (p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.hi).toFixed(1)}`
+    );
     const bottom = [...pts].reverse().map((p) => `L${x(p.t).toFixed(1)},${y(p.lo).toFixed(1)}`);
     return `${top.join('')}${bottom.join('')}Z`;
   };
@@ -161,7 +169,14 @@ export function PoolChart({
   const resetLabels = useMemo(() => {
     if (rateMode) return [];
     const placed: Box[] = [];
-    const out: { key: string; x: number; y: number; text: string; projected: boolean; title: string }[] = [];
+    const out: {
+      key: string;
+      x: number;
+      y: number;
+      text: string;
+      projected: boolean;
+      title: string;
+    }[] = [];
     for (const reset of model.resets) {
       if (reset.t < startMs || reset.t > endMs) continue;
       const series = reset.projected ? model.projected : model.recorded;
@@ -170,9 +185,11 @@ export function PoolChart({
       const cx = x(reset.t);
       const lineY = y(v);
       // The Now label and dot own the space around the present moment.
-      if (now >= startMs && now <= endMs && Math.abs(cx - x(now)) < 24 && lineY < M.top + 40) {
+      if (now >= startMs && now <= endMs && Math.abs(cx - x(now)) < LABEL_W / 2 + 4) {
         continue;
       }
+      // On a narrow chart only the bigger refills earn a label.
+      if (plotW < 400 && reset.delta < 20) continue;
       // Above the line first, then tucked under it, then further up.
       const candidates = [lineY - 12, lineY + 20, lineY - 30, lineY + 38];
       let chosen: number | null = null;
@@ -230,6 +247,15 @@ export function PoolChart({
     }
     return out;
   }, [startMs, endMs, now, locale]);
+
+  // Thin the day labels when days get narrow; today always keeps its label.
+  const pxPerDay = plotW / Math.max(1, days.length);
+  const labelEvery = pxPerDay < 18 ? 3 : pxPerDay < 34 ? 2 : 1;
+  const anchor = Math.max(
+    0,
+    days.findIndex((day) => day.today)
+  );
+  const showDayLabel = (index: number) => Math.abs(index - anchor) % labelEvery === 0;
 
   const yTicks = [0, yMax / 2, yMax];
   const tickLabel = (v: number) =>
@@ -307,7 +333,7 @@ export function PoolChart({
       >
         <defs>
           <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--pool-accent)" stopOpacity="0.32" />
+            <stop offset="0%" stopColor="var(--pool-accent)" stopOpacity="0.42" />
             <stop offset="100%" stopColor="var(--pool-accent)" stopOpacity="0.02" />
           </linearGradient>
           <clipPath id={clipId}>
@@ -346,7 +372,10 @@ export function PoolChart({
             bands.map((band, index) => (
               <g key={band.key} style={{ opacity: bandOpacity(index, bands.length) }}>
                 <path className={styles.band} d={bandPath(band.recorded)} />
-                <path className={`${styles.band} ${styles.bandProjected}`} d={bandPath(band.projected)} />
+                <path
+                  className={`${styles.band} ${styles.bandProjected}`}
+                  d={bandPath(band.projected)}
+                />
               </g>
             ))
           ) : (
@@ -386,34 +415,46 @@ export function PoolChart({
 
         {nowVisible && (
           <g>
-            <line className={styles.nowLine} x1={x(now)} x2={x(now)} y1={M.top - 14} y2={M.top + plotH + 4} />
+            <line
+              className={styles.nowLine}
+              x1={x(now)}
+              x2={x(now)}
+              y1={M.top - 14}
+              y2={M.top + plotH + 4}
+            />
             <text className={styles.nowLabel} x={x(now)} y={M.top - 20} textAnchor="middle">
               {t('quota_management.pool_now')}
             </text>
-            {hasData && (
-              <circle className={styles.nowDot} cx={x(now)} cy={y(nowValue)} r={4.5} />
-            )}
+            {hasData && <circle className={styles.nowDot} cx={x(now)} cy={y(nowValue)} r={4.5} />}
           </g>
         )}
 
-        {days.map((day) => (
-          <text
-            key={`x${day.t}`}
-            className={`${styles.xLabel} ${day.today ? styles.xLabelToday : ''}`}
-            x={x((day.t + day.end) / 2)}
-            y={M.top + plotH + 20}
-            textAnchor="middle"
-          >
-            <tspan x={x((day.t + day.end) / 2)}>{day.weekday}</tspan>
-            <tspan x={x((day.t + day.end) / 2)} dy={17}>
-              {day.day}
-            </tspan>
-          </text>
-        ))}
+        {days.map((day, index) =>
+          !showDayLabel(index) ? null : (
+            <text
+              key={`x${day.t}`}
+              className={`${styles.xLabel} ${day.today ? styles.xLabelToday : ''}`}
+              x={x((day.t + day.end) / 2)}
+              y={M.top + plotH + 20}
+              textAnchor="middle"
+            >
+              <tspan x={x((day.t + day.end) / 2)}>{day.weekday}</tspan>
+              <tspan x={x((day.t + day.end) / 2)} dy={17}>
+                {day.day}
+              </tspan>
+            </text>
+          )
+        )}
 
         {hover && (
           <g>
-            <line className={styles.crosshair} x1={x(hover.t)} x2={x(hover.t)} y1={M.top} y2={M.top + plotH} />
+            <line
+              className={styles.crosshair}
+              x1={x(hover.t)}
+              x2={x(hover.t)}
+              y1={M.top}
+              y2={M.top + plotH}
+            />
             <circle className={styles.hoverDot} cx={x(hover.t)} cy={y(hover.v)} r={4} />
           </g>
         )}
@@ -426,7 +467,12 @@ export function PoolChart({
       )}
 
       {hover && (
-        <div className={styles.tooltip} style={{ left: tooltipLeft }} role="status" aria-live="polite">
+        <div
+          className={styles.tooltip}
+          style={{ left: tooltipLeft }}
+          role="status"
+          aria-live="polite"
+        >
           <div className={styles.tooltipStamp}>{formatStamp(hover.t, locale)}</div>
           <div className={styles.tooltipValue}>
             <span>{rateMode ? formatRate(hover.v) : formatPercent(hover.v)}</span>

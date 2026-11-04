@@ -398,6 +398,30 @@
   .headRow,
   .row {
     column-gap: 16px;
+    grid-template-columns:
+      minmax(110px, 1.15fr)
+      repeat(var(--ledger-cols, 3), minmax(96px, 1fr))
+      minmax(110px, auto);
+  }
+
+  /* Wrap instead of truncating: a cut-off date is the flaw we're avoiding. */
+  .cellTop {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .cellIn {
+    overflow: visible;
+  }
+
+  .cellDate,
+  .subText,
+  .runwaySub {
+    white-space: normal;
+  }
+
+  .resetsLabel {
+    display: none;
   }
 }
 
