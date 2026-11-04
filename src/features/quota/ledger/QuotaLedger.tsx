@@ -22,7 +22,7 @@ import { QUOTA_ADAPTERS, type QuotaCardState } from '../providers';
 import type { QuotaProviderType } from '../providers/types';
 import { useClaudeResetGrants } from '../providers/claude/ClaudeResetGrants';
 import { DAY_MS, type PoolModel } from '../pool/poolModel';
-import { credentialLabel } from '../pool/poolInputs';
+import { credentialLabel, displayCredentialLabel } from '../pool/poolInputs';
 import {
   formatDuration,
   formatPercent,
@@ -35,7 +35,6 @@ import {
   buildProviderSummary,
   ledgerColumnsFor,
   ledgerTone,
-  maskCredentialName,
   type LedgerColumn,
 } from './ledgerModel';
 import styles from './QuotaLedger.module.scss';
@@ -59,8 +58,6 @@ export interface QuotaLedgerProps {
 
 const columnLabel = (t: TFunction, col: { labelKey?: string; label?: string }) =>
   col.labelKey ? t(col.labelKey) : (col.label ?? '');
-
-const looksLikeEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
 
 function ProviderIcon({ type, resolvedTheme }: { type: string; resolvedTheme: ResolvedTheme }) {
   const { t } = useTranslation();
@@ -268,7 +265,7 @@ function LedgerRow({
     Boolean(adapter.canResetQuota?.(quota));
 
   const label = credentialLabel(entry.file);
-  const shownName = showEmails || !looksLikeEmail(label) ? label : maskCredentialName(label);
+  const shownName = displayCredentialLabel(entry.file, showEmails);
   const email = typeof entry.file.email === 'string' ? entry.file.email : '';
   const updated = loading
     ? t('quota_management.ledger_loading')

@@ -427,7 +427,7 @@ export function QuotaPage() {
         .map((type) => ({
           type,
           model: buildPoolModel(
-            poolInputsFor(type, entries, getQuota, historyByAuth, fetchedAtFor),
+            poolInputsFor(type, entries, getQuota, historyByAuth, fetchedAtFor, showEmails),
             {
               now,
               burnWindowHours: poolSettings.burnWindow,
@@ -449,6 +449,7 @@ export function QuotaPage() {
       poolSettings.burnWindow,
       poolSettings.future,
       range,
+      showEmails,
       strategy,
       tab,
     ]

@@ -11,6 +11,7 @@ import type { QuotaHistorySample, QuotaHistoryWindowInput } from '@/services/api
 import { normalizeAuthIndex } from '@/utils/authIndex';
 import { getQuotaCacheKey } from '@/utils/quota/identity';
 import type { QuotaFileEntry } from '../logic';
+import { maskCredentialName } from '../ledger/ledgerModel';
 import type { QuotaCardState } from '../providers';
 import type { QuotaProviderType } from '../providers/types';
 import { HOUR_MS, WEEK_MS, type PoolAccountInput, type PoolSamplePoint } from './poolModel';
@@ -64,6 +65,12 @@ export function credentialLabel(file: AuthFileItem): string {
   return file.name.replace(/\.json$/i, '');
 }
 
+/** The label shown on screen: emails stay masked until Show emails is on. */
+export function displayCredentialLabel(file: AuthFileItem, showEmails: boolean): string {
+  const label = credentialLabel(file);
+  return showEmails || !/\S+@\S+\.\S+/.test(label) ? label : maskCredentialName(label);
+}
+
 export function samplesByAuthIndex(samples: QuotaHistorySample[]) {
   const map = new Map<string, QuotaHistorySample[]>();
   for (const sample of samples) {
@@ -79,7 +86,8 @@ export function poolInputsFor(
   entries: QuotaFileEntry[],
   quotaFor: (entry: QuotaFileEntry) => QuotaCardState | undefined,
   history: Map<string, QuotaHistorySample[]>,
-  fetchedAt: (entry: QuotaFileEntry) => number | null
+  fetchedAt: (entry: QuotaFileEntry) => number | null,
+  showEmails = false
 ): PoolAccountInput[] {
   return entries
     .filter((entry) => entry.type === provider && !entry.file.disabled)
@@ -95,7 +103,8 @@ export function poolInputsFor(
       }
       return {
         key: getQuotaCacheKey(entry.file),
-        label: credentialLabel(entry.file),
+        // Labels surface in stats and tooltips, so they obey Show emails too.
+        label: displayCredentialLabel(entry.file, showEmails),
         remaining: live ? 100 - (live.usedPercent ?? 0) : null,
         resetAtMs: live?.resetAtMs ?? null,
         periodMs: live?.periodMs ?? WEEK_MS,
