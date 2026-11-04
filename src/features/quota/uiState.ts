@@ -8,11 +8,40 @@ import {
 /** 额度页 UI 偏好：会话级持久化（sessionStorage），跨会话不携带。 */
 export type QuotaViewMode = 'ledger' | 'cards';
 
+export type QuotaPoolUiState = {
+  mode?: 'remaining' | 'rate';
+  burnWindow?: 1 | 3 | 6;
+  future?: 'same' | 'double' | 'half' | 'none';
+  showAccounts?: boolean;
+};
+
 export type QuotaUiState = {
   tab?: QuotaTabId;
   sortMode?: QuotaSortMode;
   viewMode?: QuotaViewMode;
   showEmails?: boolean;
+  pool?: QuotaPoolUiState;
+  collapsed?: string[];
+};
+
+const readPoolState = (raw: unknown): QuotaPoolUiState | undefined => {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const value = raw as Record<string, unknown>;
+  return {
+    mode: value.mode === 'rate' || value.mode === 'remaining' ? value.mode : undefined,
+    burnWindow:
+      value.burnWindow === 1 || value.burnWindow === 3 || value.burnWindow === 6
+        ? value.burnWindow
+        : undefined,
+    future:
+      value.future === 'same' ||
+      value.future === 'double' ||
+      value.future === 'half' ||
+      value.future === 'none'
+        ? value.future
+        : undefined,
+    showAccounts: typeof value.showAccounts === 'boolean' ? value.showAccounts : undefined,
+  };
 };
 
 const QUOTA_UI_STATE_KEY = 'quotaPage.uiState';
@@ -39,6 +68,10 @@ export const readQuotaUiState = (): QuotaUiState | null => {
       viewMode:
         parsed.viewMode === 'ledger' || parsed.viewMode === 'cards' ? parsed.viewMode : undefined,
       showEmails: typeof parsed.showEmails === 'boolean' ? parsed.showEmails : undefined,
+      pool: readPoolState(parsed.pool),
+      collapsed: Array.isArray(parsed.collapsed)
+        ? parsed.collapsed.filter((item): item is string => typeof item === 'string')
+        : undefined,
     };
   } catch {
     return null;

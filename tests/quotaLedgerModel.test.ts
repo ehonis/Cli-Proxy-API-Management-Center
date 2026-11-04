@@ -25,11 +25,11 @@ describe('ledger model', () => {
     expect(maskCredentialName('no-email.json')).toBe('no-email.json');
   });
 
-  test('claude columns: fable first, all-models 7-day muted', () => {
+  test('claude columns: all-models 7-day, 5-hour, then Fable', () => {
     const cols = ledgerColumnsFor('claude', claude(42, 0, 21, 1));
-    expect(cols.map((c) => c.id)).toEqual(['seven-day-fable', 'five-hour', 'seven-day']);
-    expect(cols[0].remaining).toBe(58);
-    expect(cols[2].muted).toBe(true);
+    expect(cols.map((c) => c.id)).toEqual(['seven-day', 'five-hour', 'seven-day-fable']);
+    expect(cols[0].remaining).toBe(79);
+    expect(cols[2].remaining).toBe(58);
   });
 
   test('summary pools remaining across credentials', () => {
@@ -40,11 +40,11 @@ describe('ledger model', () => {
       claude(0, 0, 0, soon),
       undefined,
     ]);
-    expect(summary?.primary.totalRemaining).toBe(158);
+    expect(summary?.primary.totalRemaining).toBe(179);
     expect(summary?.primary.capacity).toBe(300);
-    expect(summary?.primary.segments).toEqual([58, 100, null]);
+    expect(summary?.primary.segments).toEqual([79, 100, null]);
     expect(summary?.primary.soonestResetMs).toBe(soon);
-    expect(summary?.secondary?.columnId).toBe('seven-day');
+    expect(summary?.secondary?.columnId).toBe('seven-day-fable');
   });
 
   test('tones', () => {

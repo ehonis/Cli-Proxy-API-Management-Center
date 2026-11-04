@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { IconRefreshCw } from '@/components/ui/icons';
+import { IconEye, IconEyeOff, IconRefreshCw } from '@/components/ui/icons';
 import { useCountUp } from '@/hooks/motion';
 import styles from './QuotaHeader.module.scss';
 
@@ -72,6 +72,11 @@ export function QuotaHeader(props: QuotaHeaderProps) {
             onClick={onToggleEmails}
             aria-pressed={Boolean(showEmails)}
           >
+            {showEmails ? (
+              <IconEyeOff size={16} aria-hidden="true" />
+            ) : (
+              <IconEye size={16} aria-hidden="true" />
+            )}
             {showEmails ? t('quota_management.hide_emails') : t('quota_management.show_emails')}
           </button>
         )}
@@ -82,7 +87,7 @@ export function QuotaHeader(props: QuotaHeaderProps) {
           disabled={disableControls || refreshing}
         >
           <IconRefreshCw size={14} className={refreshing ? styles.spinning : undefined} />
-          {t('quota_management.refresh')}
+          {t('quota_management.refresh_all')}
         </button>
       </div>
     </header>

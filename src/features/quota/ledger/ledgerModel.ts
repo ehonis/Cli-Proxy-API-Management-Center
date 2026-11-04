@@ -41,9 +41,8 @@ const finiteMs = (value: number | null | undefined): number | null =>
 
 function claudeColumns(quota: ClaudeQuotaState): LedgerColumn[] {
   const byId = new Map((quota.windows ?? []).map((w) => [w.id, w]));
-  const fable = byId.get('seven-day-fable');
   const columns: LedgerColumn[] = [];
-  const push = (id: string, muted = false) => {
+  const push = (id: string) => {
     const w = byId.get(id);
     if (!w) return;
     columns.push({
@@ -53,13 +52,14 @@ function claudeColumns(quota: ClaudeQuotaState): LedgerColumn[] {
       remaining: remainingFromUsed(w.usedPercent),
       resetAtMs: finiteMs(w.resetAtMs),
       resetLabel: w.resetLabel,
-      muted,
     });
   };
-  push('seven-day-fable');
+  // The all-models weekly limit governs routing, so it leads; the 5-hour
+  // window and the model-scoped weekly limit follow.
+  push('seven-day');
   push('five-hour');
-  push('seven-day', Boolean(fable));
-  if (columns.length < 3) push('seven-day-opus', true);
+  push('seven-day-fable');
+  if (columns.length < 3) push('seven-day-opus');
   return columns.slice(0, 3);
 }
 

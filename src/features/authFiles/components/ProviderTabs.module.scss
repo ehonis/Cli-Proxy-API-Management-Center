@@ -137,3 +137,52 @@
     transform: none;
   }
 }
+
+/* ---------- pill variant (quota page) ---------- */
+
+.pill {
+  gap: 6px;
+  border-bottom: 0;
+
+  .tab {
+    gap: 9px;
+    height: 46px;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  .tabActive {
+    background: var(--pool-control-bg);
+    font-weight: 600;
+  }
+
+  .tabCount {
+    padding: 0;
+    background: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+  }
+
+  .tabActive .tabCount {
+    background: none;
+    color: var(--text-tertiary);
+  }
+
+  .tabIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .tabIconWrap {
+    width: 22px;
+    height: 22px;
+  }
+}

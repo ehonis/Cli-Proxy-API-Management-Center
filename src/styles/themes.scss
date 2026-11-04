@@ -90,6 +90,18 @@
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --dur-press: 160ms;
   --dur-hover: 200ms;
+
+  // Quota pool + ledger surfaces
+  --pool-surface: var(--bg-primary);
+  --pool-border: var(--border-color);
+  --pool-control-bg: var(--bg-tertiary);
+  --pool-control-active: var(--bg-primary);
+  --pool-grid: rgba(0, 0, 0, 0.06);
+  --pool-grid-strong: rgba(0, 0, 0, 0.14);
+  --pool-band-edge: rgba(255, 255, 255, 0.7);
+  --ledger-bar: #2d2a26;
+  --ledger-low: #c65746;
+  --ledger-track: rgba(0, 0, 0, 0.08);
 }
 
 // 纯白主题
@@ -165,11 +177,11 @@
 // 深色主题（#191919）
 [data-theme='dark'] {
   // 极简暖灰：深色模式（提升对比度与层级）
-  --bg-secondary: #0b0b0c; // page background (near-black console)
-  --bg-primary: #111113; // cards / containers
-  --bg-tertiary: #1a1a1d; // hover / secondary surfaces
-  --bg-hover: #202024;
-  --bg-quinary: #0f0f11;
+  --bg-secondary: #000000; // page background (true black console)
+  --bg-primary: #0e0e0f; // cards / containers
+  --bg-tertiary: #18181a; // hover / secondary surfaces
+  --bg-hover: #1f1f22;
+  --bg-quinary: #0b0b0c;
   --bg-error-light: rgba(198, 87, 70, 0.18);
   --floating-surface: #18181b;
   --floating-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
@@ -243,7 +255,17 @@
   --ledger-high: #22c55e;
   --ledger-medium: #eab308;
   --ledger-low: #ef4444;
-  --ledger-track: rgba(255, 255, 255, 0.09);
+  --ledger-track: rgba(255, 255, 255, 0.1);
+  --ledger-bar: #f4f4f5;
+
+  // Quota pool surfaces
+  --pool-surface: #0c0c0d;
+  --pool-border: #1d1d20;
+  --pool-control-bg: #161618;
+  --pool-control-active: #2a2a2e;
+  --pool-grid: rgba(255, 255, 255, 0.05);
+  --pool-grid-strong: rgba(255, 255, 255, 0.12);
+  --pool-band-edge: rgba(0, 0, 0, 0.55);
 }
 
 @media (max-width: 768px),

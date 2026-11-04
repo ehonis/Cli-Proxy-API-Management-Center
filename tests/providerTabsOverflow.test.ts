@@ -25,6 +25,6 @@ describe('provider filter overflow', () => {
 
   test('allocates remaining quota toolbar width without shrinking the sort control', () => {
     expect(quotaStyles).toMatch(/> :first-child\s*\{\s*flex: 1 1 auto;\s*min-width: 0;/);
-    expect(quotaStyles).toMatch(/\.sort\s*\{\s*flex: 0 0 auto;/);
+    expect(quotaStyles).toMatch(/\.sort\s*\{\s*flex: 0 0 150px;/);
   });
 });
