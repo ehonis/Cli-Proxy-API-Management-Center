@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { captureQuotaCacheGeneration, commitIfQuotaCacheCurrent, useQuotaStore } from '@/stores';
 import { getStatusFromError } from '@/utils/quota';
 import { getQuotaCacheKey } from '@/utils/quota/identity';
-import { keepsPreviousReading } from './autoRefresh';
+import { keepsPreviousReading, mergeQueued } from './autoRefresh';
 import type { QuotaFileEntry } from '../logic';
 import { QUOTA_ADAPTERS, getQuotaSetter, type QuotaCardState } from '../providers';
 import { enrichQuotaInBackground } from '../quotaEnrichment';
@@ -54,12 +54,12 @@ export function useQuotaBatchLoader() {
         if (!silent && silentRef.current) {
           // Merge rather than replace: a manual Refresh all and Devin's
           // first-visit load can both arrive during one poll.
-          const generation = useQuotaStore.getState().cacheGeneration;
-          const queued =
-            queuedRef.current?.generation === generation ? queuedRef.current.targets : [];
-          const byKey = new Map(queued.map((e) => [`${e.type}:${getQuotaCacheKey(e.file)}`, e]));
-          for (const e of targets) byKey.set(`${e.type}:${getQuotaCacheKey(e.file)}`, e);
-          queuedRef.current = { targets: [...byKey.values()], generation };
+          queuedRef.current = mergeQueued(
+            queuedRef.current,
+            useQuotaStore.getState().cacheGeneration,
+            targets,
+            (e) => `${e.type}:${getQuotaCacheKey(e.file)}`
+          );
         }
         return false;
       }

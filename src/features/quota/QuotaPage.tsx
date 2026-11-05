@@ -70,6 +70,7 @@ import {
   writeAutoRefresh,
   autoRefreshMs,
   type AutoRefreshInterval,
+  type PollScope,
 } from './hooks/autoRefresh';
 import { useQuotaAutoRefresh } from './hooks/useQuotaAutoRefresh';
 import {
@@ -455,8 +456,8 @@ export function QuotaPage() {
       }),
     [entries, getQuota]
   );
-  // The oldest reading on screen: both the header's age and the poll's clock,
-  // so a failed poll never makes stale numbers look fresh.
+  // The oldest reading among the poll targets is the poll's clock, so a failed
+  // poll never makes stale numbers look fresh.
   const oldestFetchedAt = useMemo(() => {
     let oldest: number | null = null;
     for (const entry of pollTargets) {
@@ -475,12 +476,19 @@ export function QuotaPage() {
     [fetchedAt, getQuota, pollTargets]
   );
   const runAutoRefresh = useCallback(
-    () =>
+    (scope: PollScope) =>
       loadQuota(
-        pollTargets.filter((entry) => getQuota(entry)?.status !== 'loading'),
+        pollTargets.filter((entry) => {
+          const quota = getQuota(entry);
+          if (quota?.status === 'loading') return false;
+          return (
+            scope === 'all' ||
+            (quota?.status === 'error' && fetchedAt[getQuotaCacheKey(entry.file)] === undefined)
+          );
+        }),
         { silent: true }
       ),
-    [getQuota, loadQuota, pollTargets]
+    [fetchedAt, getQuota, loadQuota, pollTargets]
   );
   useQuotaAutoRefresh({
     enabled: canUseActions && !error,
@@ -599,6 +607,23 @@ export function QuotaPage() {
     [providerCards]
   );
 
+  // The header's age covers only what is on screen: the rows in view, plus the
+  // pooled providers while their chart is showing.
+  const shownUpdatedAt = useMemo(() => {
+    const rows = viewMode === 'ledger' ? filteredEntries : pageItems;
+    const charted =
+      poolCards.length > 0
+        ? entries.filter((e) => isPoolProvider(e.type) && (tab === 'all' || tab === e.type))
+        : [];
+    let oldest: number | null = null;
+    for (const entry of [...rows, ...charted]) {
+      if (entry.file.disabled) continue;
+      const at = fetchedAt[getQuotaCacheKey(entry.file)];
+      if (at !== undefined && (oldest === null || at < oldest)) oldest = at;
+    }
+    return oldest;
+  }, [entries, fetchedAt, filteredEntries, pageItems, poolCards.length, tab, viewMode]);
+
   const handlePoolSettingsChange = useCallback(
     (patch: Partial<PoolSettings> | ((prev: PoolSettings) => Partial<PoolSettings>)) => {
       setPoolSettings((prev) => {
@@ -663,7 +688,7 @@ export function QuotaPage() {
         onRefreshAll={handleRefreshAll}
         showEmails={showEmails}
         onToggleEmails={handleToggleEmails}
-        updatedAt={oldestFetchedAt}
+        updatedAt={shownUpdatedAt}
         now={now}
         autoRefresh={autoRefresh}
         onAutoRefreshChange={handleAutoRefreshChange}

@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { isPollDue } from './autoRefresh';
+import { pollScope, type PollScope } from './autoRefresh';
 
 /** How often to check whether a refresh is due; the interval itself is coarser. */
 const CHECK_MS = 15_000;
@@ -19,8 +19,8 @@ export interface QuotaAutoRefreshOptions {
   oldestFetchedAt: number | null;
   /** A poll target whose fetches have only ever failed, so it has no age. */
   hasFailedWithoutReading: boolean;
-  /** Starts a refresh; resolves false when the loader was busy. */
-  run: () => Promise<boolean>;
+  /** Starts a refresh of the given scope; resolves false when the loader was busy. */
+  run: (scope: PollScope) => Promise<boolean>;
 }
 
 export function useQuotaAutoRefresh({
@@ -43,11 +43,12 @@ export function useQuotaAutoRefresh({
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
       const { oldestFetchedAt: oldest, hasFailedWithoutReading: failed } = latest.current;
-      if (!isPollDue(oldest, lastAttemptAt.current, now, intervalMs, failed)) return;
+      const scope = pollScope(oldest, lastAttemptAt.current, now, intervalMs, failed);
+      if (scope === null) return;
       const previous = lastAttemptAt.current;
       lastAttemptAt.current = now;
       void latest.current
-        .run()
+        .run(scope)
         .catch(() => true)
         .then((started) => {
           // Busy loader: nothing was attempted, so try again on the next check.
