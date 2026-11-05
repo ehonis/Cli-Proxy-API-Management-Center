@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { pollScope, type PollScope } from './autoRefresh';
+import { isPollDue } from './autoRefresh';
 
 /** How often to check whether a refresh is due; the interval itself is coarser. */
 const CHECK_MS = 15_000;
@@ -17,23 +17,23 @@ export interface QuotaAutoRefreshOptions {
   intervalMs: number | null;
   /** Oldest reading among the poll targets; null until one lands. */
   oldestFetchedAt: number | null;
-  /** A poll target whose fetches have only ever failed, so it has no age. */
-  hasFailedWithoutReading: boolean;
-  /** Starts a refresh of the given scope; resolves false when the loader was busy. */
-  run: (scope: PollScope) => Promise<boolean>;
+  /** A poll target is showing an error; retried even before any reading lands. */
+  hasFailedTarget: boolean;
+  /** Starts a refresh; resolves false when the loader was busy. */
+  run: () => Promise<boolean>;
 }
 
 export function useQuotaAutoRefresh({
   enabled,
   intervalMs,
   oldestFetchedAt,
-  hasFailedWithoutReading,
+  hasFailedTarget,
   run,
 }: QuotaAutoRefreshOptions) {
   // Read through refs so the timers are not torn down on every render.
-  const latest = useRef({ oldestFetchedAt, hasFailedWithoutReading, run });
+  const latest = useRef({ oldestFetchedAt, hasFailedTarget, run });
   useEffect(() => {
-    latest.current = { oldestFetchedAt, hasFailedWithoutReading, run };
+    latest.current = { oldestFetchedAt, hasFailedTarget, run };
   });
   const lastAttemptAt = useRef<number | null>(null);
 
@@ -42,13 +42,12 @@ export function useQuotaAutoRefresh({
     const check = () => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
-      const { oldestFetchedAt: oldest, hasFailedWithoutReading: failed } = latest.current;
-      const scope = pollScope(oldest, lastAttemptAt.current, now, intervalMs, failed);
-      if (scope === null) return;
+      const { oldestFetchedAt: oldest, hasFailedTarget: failed } = latest.current;
+      if (!isPollDue(oldest, lastAttemptAt.current, now, intervalMs, failed)) return;
       const previous = lastAttemptAt.current;
       lastAttemptAt.current = now;
       void latest.current
-        .run(scope)
+        .run()
         .catch(() => true)
         .then((started) => {
           // Busy loader: nothing was attempted, so try again on the next check.

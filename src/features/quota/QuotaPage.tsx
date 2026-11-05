@@ -70,7 +70,7 @@ import {
   writeAutoRefresh,
   autoRefreshMs,
   type AutoRefreshInterval,
-  type PollScope,
+  oldestReading,
 } from './hooks/autoRefresh';
 import { useQuotaAutoRefresh } from './hooks/useQuotaAutoRefresh';
 import {
@@ -85,6 +85,12 @@ import styles from './QuotaPage.module.scss';
 /** Tabs always shown even when empty; the rest appear only once they have credentials. */
 const CORE_TAB_IDS = new Set<string>(['claude', 'antigravity', 'codex', 'xai', 'kimi']);
 const SKELETON_CARD_COUNT = 6;
+
+/**
+ * Credentials the background poll keeps fresh. Devin is left out on purpose:
+ * it is queried once per visit, never polled, and its row shows its own age.
+ */
+const isPolled = (entry: QuotaFileEntry) => !entry.file.disabled && entry.type !== 'devin';
 
 export function QuotaPage() {
   const { t } = useTranslation();
@@ -447,54 +453,41 @@ export function QuotaPage() {
     writeAutoRefresh(next);
   }, []);
   // Everything already on screen, plus the pooled providers the chart needs.
-  // Devin is left out on purpose: it is queried once per visit, never polled.
   const pollTargets = useMemo(
     () =>
       entries.filter((entry) => {
-        if (entry.file.disabled || entry.type === 'devin') return false;
+        if (!isPolled(entry)) return false;
         return getQuota(entry) !== undefined || isPoolProvider(entry.type);
       }),
     [entries, getQuota]
   );
   // The oldest reading among the poll targets is the poll's clock, so a failed
   // poll never makes stale numbers look fresh.
-  const oldestFetchedAt = useMemo(() => {
-    let oldest: number | null = null;
-    for (const entry of pollTargets) {
-      const at = fetchedAt[getQuotaCacheKey(entry.file)];
-      if (at !== undefined && (oldest === null || at < oldest)) oldest = at;
-    }
-    return oldest;
-  }, [fetchedAt, pollTargets]);
-  const hasFailedWithoutReading = useMemo(
+  const oldestFetchedAt = useMemo(
     () =>
-      pollTargets.some(
-        (entry) =>
-          getQuota(entry)?.status === 'error' &&
-          fetchedAt[getQuotaCacheKey(entry.file)] === undefined
+      oldestReading(
+        pollTargets.map((entry) => getQuotaCacheKey(entry.file)),
+        fetchedAt
       ),
-    [fetchedAt, getQuota, pollTargets]
+    [fetchedAt, pollTargets]
+  );
+  const hasFailedTarget = useMemo(
+    () => pollTargets.some((entry) => getQuota(entry)?.status === 'error'),
+    [getQuota, pollTargets]
   );
   const runAutoRefresh = useCallback(
-    (scope: PollScope) =>
+    () =>
       loadQuota(
-        pollTargets.filter((entry) => {
-          const quota = getQuota(entry);
-          if (quota?.status === 'loading') return false;
-          return (
-            scope === 'all' ||
-            (quota?.status === 'error' && fetchedAt[getQuotaCacheKey(entry.file)] === undefined)
-          );
-        }),
+        pollTargets.filter((entry) => getQuota(entry)?.status !== 'loading'),
         { silent: true }
       ),
-    [fetchedAt, getQuota, loadQuota, pollTargets]
+    [getQuota, loadQuota, pollTargets]
   );
   useQuotaAutoRefresh({
     enabled: canUseActions && !error,
     intervalMs: autoRefreshMs(autoRefresh),
     oldestFetchedAt,
-    hasFailedWithoutReading,
+    hasFailedTarget,
     run: runAutoRefresh,
   });
 
@@ -607,21 +600,18 @@ export function QuotaPage() {
     [providerCards]
   );
 
-  // The header's age covers only what is on screen: the rows in view, plus the
-  // pooled providers while their chart is showing.
+  // The header's age covers only what is on screen and kept fresh: the polled
+  // rows in view, plus the pooled providers while their chart is showing.
   const shownUpdatedAt = useMemo(() => {
     const rows = viewMode === 'ledger' ? filteredEntries : pageItems;
     const charted =
       poolCards.length > 0
         ? entries.filter((e) => isPoolProvider(e.type) && (tab === 'all' || tab === e.type))
         : [];
-    let oldest: number | null = null;
-    for (const entry of [...rows, ...charted]) {
-      if (entry.file.disabled) continue;
-      const at = fetchedAt[getQuotaCacheKey(entry.file)];
-      if (at !== undefined && (oldest === null || at < oldest)) oldest = at;
-    }
-    return oldest;
+    const keys = [...rows, ...charted]
+      .filter(isPolled)
+      .map((entry) => getQuotaCacheKey(entry.file));
+    return oldestReading(keys, fetchedAt);
   }, [entries, fetchedAt, filteredEntries, pageItems, poolCards.length, tab, viewMode]);
 
   const handlePoolSettingsChange = useCallback(

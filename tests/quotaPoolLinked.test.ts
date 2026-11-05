@@ -17,9 +17,10 @@ import {
 import { mergePoolModels } from '../src/features/quota/pool/poolMerge';
 import {
   autoRefreshMs,
+  isPollDue,
   keepsPreviousReading,
   mergeQueued,
-  pollScope,
+  oldestReading,
 } from '../src/features/quota/hooks/autoRefresh';
 
 const NOW = Date.UTC(2026, 10, 3, 18, 0, 0);
@@ -222,29 +223,46 @@ describe('provider merge', () => {
 describe('auto-refresh timing', () => {
   const FIVE_MIN = autoRefreshMs('5')!;
 
-  test('refreshes everything once the oldest reading is an interval old', () => {
+  test('is due once the oldest reading is an interval old', () => {
     expect(FIVE_MIN).toBe(5 * 60_000);
     expect(autoRefreshMs('off')).toBeNull();
-    expect(pollScope(NOW - 4 * 60_000, null, NOW, FIVE_MIN)).toBeNull();
-    expect(pollScope(NOW - 5 * 60_000, null, NOW, FIVE_MIN)).toBe('all');
+    expect(isPollDue(NOW - 4 * 60_000, null, NOW, FIVE_MIN)).toBe(false);
+    expect(isPollDue(NOW - 5 * 60_000, null, NOW, FIVE_MIN)).toBe(true);
   });
 
-  test('leaves the first load to the page', () => {
-    expect(pollScope(null, null, NOW, FIVE_MIN)).toBeNull();
+  test('leaves the first load to the page until something fails', () => {
+    expect(isPollDue(null, null, NOW, FIVE_MIN)).toBe(false);
+    expect(isPollDue(null, null, NOW, FIVE_MIN, true)).toBe(true);
+    expect(isPollDue(null, NOW - 60_000, NOW, FIVE_MIN, true)).toBe(false);
   });
 
   test('retries a failing poll once per interval, not on every check', () => {
     // The reading stayed old because the last attempt failed a minute ago.
-    expect(pollScope(NOW - 30 * 60_000, NOW - 60_000, NOW, FIVE_MIN)).toBeNull();
-    expect(pollScope(NOW - 30 * 60_000, NOW - FIVE_MIN, NOW, FIVE_MIN)).toBe('all');
+    expect(isPollDue(NOW - 30 * 60_000, NOW - 60_000, NOW, FIVE_MIN)).toBe(false);
+    expect(isPollDue(NOW - 30 * 60_000, NOW - FIVE_MIN, NOW, FIVE_MIN)).toBe(true);
   });
 
-  test('retries only the credentials that never loaded, once per interval', () => {
-    expect(pollScope(null, null, NOW, FIVE_MIN, true)).toBe('failed');
-    expect(pollScope(NOW - 60_000, null, NOW, FIVE_MIN, true)).toBe('failed');
-    expect(pollScope(null, NOW - 60_000, NOW, FIVE_MIN, true)).toBeNull();
-    // A stale reading still refreshes everything.
-    expect(pollScope(NOW - FIVE_MIN, NOW - FIVE_MIN, NOW, FIVE_MIN, true)).toBe('all');
+  test('a dead credential among good ones keeps the full cadence', () => {
+    // Checks every 15s; each full poll lands its good readings 2s later.
+    const CHECK = 15_000;
+    let oldest: number | null = 0;
+    let lastAttempt: number | null = null;
+    const polls: number[] = [];
+    for (let t = CHECK; t <= 40 * 60_000; t += CHECK) {
+      if (isPollDue(oldest, lastAttempt, t, FIVE_MIN, true)) {
+        lastAttempt = t;
+        polls.push(t);
+        oldest = t + 2_000;
+      }
+    }
+    const gaps = polls.slice(1).map((t, i) => t - polls[i]);
+    expect(gaps.length).toBeGreaterThanOrEqual(6);
+    for (const gap of gaps) expect(gap).toBeLessThanOrEqual(FIVE_MIN + CHECK);
+  });
+
+  test('oldest reading ignores keys that never landed', () => {
+    expect(oldestReading(['a', 'b', 'c'], { a: 30, b: 10 })).toBe(10);
+    expect(oldestReading(['c'], { a: 30 })).toBeNull();
   });
 
   test('queued manual loads merge, and an old session queue is dropped', () => {

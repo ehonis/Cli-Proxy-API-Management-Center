@@ -15,26 +15,33 @@ export function autoRefreshMs(interval: AutoRefreshInterval): number | null {
   return interval === 'off' ? null : Number(interval) * 60_000;
 }
 
-export type PollScope = 'all' | 'failed';
-
 /**
- * What a poll should refresh now, if anything. Everything once the oldest
- * reading is an interval old; only the failed credentials when some have
- * never loaded (so one dead token does not refetch every quota); nothing
- * when an attempt was made within the last interval, so a failing credential
- * is retried once per interval, not on every check. With nothing loaded or
- * failed yet, the page's own first load is in charge.
+ * Whether a background refresh of every polled credential is due. Once any
+ * reading has landed, when the oldest one is an interval old (a dead
+ * credential among good ones is retried by that same full poll). Before any
+ * has landed, only once a credential has failed: until then the page's own
+ * first load is in charge. Either way at most one attempt per interval, so a
+ * failing poll is not retried on every check.
  */
-export function pollScope(
+export function isPollDue(
   oldestFetchedAt: number | null,
   lastAttemptAt: number | null,
   now: number,
   intervalMs: number,
-  hasFailedWithoutReading = false
-): PollScope | null {
-  if (lastAttemptAt !== null && now - lastAttemptAt < intervalMs) return null;
-  if (oldestFetchedAt !== null && now - oldestFetchedAt >= intervalMs) return 'all';
-  return hasFailedWithoutReading ? 'failed' : null;
+  hasFailedTarget = false
+): boolean {
+  if (lastAttemptAt !== null && now - lastAttemptAt < intervalMs) return false;
+  return oldestFetchedAt !== null ? now - oldestFetchedAt >= intervalMs : hasFailedTarget;
+}
+
+/** The oldest reading among these keys, or null when none has landed. */
+export function oldestReading(keys: Iterable<string>, fetchedAt: Record<string, number>) {
+  let oldest: number | null = null;
+  for (const key of keys) {
+    const at = fetchedAt[key];
+    if (at !== undefined && (oldest === null || at < oldest)) oldest = at;
+  }
+  return oldest;
 }
 
 /**
