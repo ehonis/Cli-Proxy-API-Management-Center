@@ -16,18 +16,21 @@ export function autoRefreshMs(interval: AutoRefreshInterval): number | null {
 }
 
 /**
- * Due when the oldest reading on screen is at least one interval old, and no
- * attempt was made within the last interval (so a failing credential is
- * retried once per interval, not on every check). Before the first reading
- * lands the page's own first load is in charge, so nothing is due.
+ * Due when the oldest reading on screen is at least one interval old, or a
+ * credential has only an error to show, and no attempt was made within the
+ * last interval (so a failing credential is retried once per interval, not on
+ * every check). With nothing loaded or failed yet, the page's own first load
+ * is in charge, so nothing is due.
  */
 export function isPollDue(
   oldestFetchedAt: number | null,
   lastAttemptAt: number | null,
   now: number,
-  intervalMs: number
+  intervalMs: number,
+  hasFailedWithoutReading = false
 ): boolean {
-  if (oldestFetchedAt === null || now - oldestFetchedAt < intervalMs) return false;
+  const stale = oldestFetchedAt !== null && now - oldestFetchedAt >= intervalMs;
+  if (!stale && !hasFailedWithoutReading) return false;
   return lastAttemptAt === null || now - lastAttemptAt >= intervalMs;
 }
 

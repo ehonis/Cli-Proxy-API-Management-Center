@@ -52,10 +52,14 @@ export function useQuotaBatchLoader() {
       if (loadingRef.current) {
         // Never drop an explicit refresh behind a background poll; run it next.
         if (!silent && silentRef.current) {
-          queuedRef.current = {
-            targets,
-            generation: useQuotaStore.getState().cacheGeneration,
-          };
+          // Merge rather than replace: a manual Refresh all and Devin's
+          // first-visit load can both arrive during one poll.
+          const generation = useQuotaStore.getState().cacheGeneration;
+          const queued =
+            queuedRef.current?.generation === generation ? queuedRef.current.targets : [];
+          const byKey = new Map(queued.map((e) => [`${e.type}:${getQuotaCacheKey(e.file)}`, e]));
+          for (const e of targets) byKey.set(`${e.type}:${getQuotaCacheKey(e.file)}`, e);
+          queuedRef.current = { targets: [...byKey.values()], generation };
         }
         return false;
       }

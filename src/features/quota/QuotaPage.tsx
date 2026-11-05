@@ -465,6 +465,15 @@ export function QuotaPage() {
     }
     return oldest;
   }, [fetchedAt, pollTargets]);
+  const hasFailedWithoutReading = useMemo(
+    () =>
+      pollTargets.some(
+        (entry) =>
+          getQuota(entry)?.status === 'error' &&
+          fetchedAt[getQuotaCacheKey(entry.file)] === undefined
+      ),
+    [fetchedAt, getQuota, pollTargets]
+  );
   const runAutoRefresh = useCallback(
     () =>
       loadQuota(
@@ -477,6 +486,7 @@ export function QuotaPage() {
     enabled: canUseActions && !error,
     intervalMs: autoRefreshMs(autoRefresh),
     oldestFetchedAt,
+    hasFailedWithoutReading,
     run: runAutoRefresh,
   });
 

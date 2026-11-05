@@ -236,6 +236,12 @@ describe('auto-refresh timing', () => {
     expect(isPollDue(NOW - 30 * 60_000, NOW - FIVE_MIN, NOW, FIVE_MIN)).toBe(true);
   });
 
+  test('retries a credential that has only ever failed, once per interval', () => {
+    expect(isPollDue(null, null, NOW, FIVE_MIN, true)).toBe(true);
+    expect(isPollDue(null, NOW - 60_000, NOW, FIVE_MIN, true)).toBe(false);
+    expect(isPollDue(NOW - 60_000, NOW - FIVE_MIN, NOW, FIVE_MIN, true)).toBe(true);
+  });
+
   test('a failed background poll keeps only a good previous reading', () => {
     expect(keepsPreviousReading(true, 'error', { status: 'success' })).toBe(true);
     expect(keepsPreviousReading(true, 'error', { status: 'error' })).toBe(false);

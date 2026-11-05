@@ -17,6 +17,8 @@ export interface QuotaAutoRefreshOptions {
   intervalMs: number | null;
   /** Oldest reading among the poll targets; null until one lands. */
   oldestFetchedAt: number | null;
+  /** A poll target whose fetches have only ever failed, so it has no age. */
+  hasFailedWithoutReading: boolean;
   /** Starts a refresh; resolves false when the loader was busy. */
   run: () => Promise<boolean>;
 }
@@ -25,12 +27,13 @@ export function useQuotaAutoRefresh({
   enabled,
   intervalMs,
   oldestFetchedAt,
+  hasFailedWithoutReading,
   run,
 }: QuotaAutoRefreshOptions) {
   // Read through refs so the timers are not torn down on every render.
-  const latest = useRef({ oldestFetchedAt, run });
+  const latest = useRef({ oldestFetchedAt, hasFailedWithoutReading, run });
   useEffect(() => {
-    latest.current = { oldestFetchedAt, run };
+    latest.current = { oldestFetchedAt, hasFailedWithoutReading, run };
   });
   const lastAttemptAt = useRef<number | null>(null);
 
@@ -39,9 +42,8 @@ export function useQuotaAutoRefresh({
     const check = () => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
-      if (!isPollDue(latest.current.oldestFetchedAt, lastAttemptAt.current, now, intervalMs)) {
-        return;
-      }
+      const { oldestFetchedAt: oldest, hasFailedWithoutReading: failed } = latest.current;
+      if (!isPollDue(oldest, lastAttemptAt.current, now, intervalMs, failed)) return;
       const previous = lastAttemptAt.current;
       lastAttemptAt.current = now;
       void latest.current
