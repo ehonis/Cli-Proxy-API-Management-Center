@@ -2,7 +2,7 @@
  * Server history + per-credential fetch times for the pool panel and ledger.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { quotaHistoryApi, type QuotaHistorySample } from '@/services/api/quotaHistory';
 import { apiClient } from '@/services/api/client';
 import { normalizeAuthIndex } from '@/utils/authIndex';
@@ -83,7 +83,7 @@ export function useQuotaFetchTimes(
   historySupported: boolean,
   onRecorded: () => void
 ) {
-  const [, setVersion] = useState(0);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     const posts: Promise<unknown>[] = [];
@@ -119,11 +119,16 @@ export function useQuotaFetchTimes(
     if (posts.length > 0) void Promise.allSettled(posts).then(onRecorded);
   }, [entries, quotaFor, historySupported, onRecorded]);
 
-  const fetchedAt: Record<string, number> = {};
-  for (const entry of entries) {
-    const quota = quotaFor(entry);
-    const at = quota ? landedAt.get(quota) : undefined;
-    if (at !== undefined) fetchedAt[getQuotaCacheKey(entry.file)] = at;
-  }
-  return fetchedAt;
+  // Stable between landings, so the pool models downstream are not rebuilt
+  // on every render. `version` bumps when the effect above stamps a result.
+  return useMemo(() => {
+    void version;
+    const fetchedAt: Record<string, number> = {};
+    for (const entry of entries) {
+      const quota = quotaFor(entry);
+      const at = quota ? landedAt.get(quota) : undefined;
+      if (at !== undefined) fetchedAt[getQuotaCacheKey(entry.file)] = at;
+    }
+    return fetchedAt;
+  }, [entries, quotaFor, version]);
 }

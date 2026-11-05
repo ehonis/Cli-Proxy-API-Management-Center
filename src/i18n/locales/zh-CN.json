@@ -1667,8 +1667,6 @@
     "pool_providers_combined": "合并",
     "pool_providers_toggle": "按提供商",
     "pool_all_providers": "全部提供商",
-    "pool_provider_claude": "Claude",
-    "pool_provider_codex": "Codex",
     "pool_locked_out": "全部锁定",
     "pool_first_lockout": "首个锁定",
     "pool_no_lockout": "两周内无",

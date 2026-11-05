@@ -187,6 +187,8 @@ function withProjection(
     nextResetOf: (key: string) => number | null;
     /** Only count a run-dry before the account's own next reset. */
     beforeResetOnly: boolean;
+    /** Report the first projected refill after a run-dry as the account's next reset. */
+    resetFromRecovery?: boolean;
   }
 ): PoolModel {
   const { now, horizonEndMs } = options;
@@ -227,14 +229,24 @@ function withProjection(
 
   const accounts: PoolAccountProjection[] = base.accounts.map((a) => {
     let emptyAtMs: number | null = null;
+    let recoveryMs: number | null = null;
     const values = projectedByAccount[a.key];
+    const dry = EMPTY_EPSILON * (a.share / 100);
     for (let i = 0; i < times.length && times[i] <= horizonEndMs; i += 1) {
-      if ((values[i] ?? 0) <= EMPTY_EPSILON * (a.share / 100)) {
+      if ((values[i] ?? 0) <= dry) {
         emptyAtMs = times[i];
+        for (let j = i + 1; j < times.length; j += 1) {
+          if ((values[j] ?? 0) > dry) {
+            recoveryMs = times[j];
+            break;
+          }
+        }
         break;
       }
     }
-    return { ...a, emptyAtMs, nextResetMs: options.nextResetOf(a.key) };
+    const nextResetMs =
+      options.resetFromRecovery && emptyAtMs !== null ? recoveryMs : options.nextResetOf(a.key);
+    return { ...a, emptyAtMs, nextResetMs };
   });
 
   return {
@@ -344,8 +356,11 @@ export function buildLinkedPoolModels(
   const fiveHorizon = now + FIVE_HOUR_HORIZON_MS;
   const projectEnd = Math.max(weeklyHorizon, options.projectToMs);
 
-  const weeklyBase = buildPoolModel(weeklyInputs, { ...options, horizonMs: PROJECTION_HORIZON_MS });
-  const fiveBase = buildPoolModel(fiveInputs, { ...options, horizonMs: FIVE_HOUR_HORIZON_MS });
+  // Only the recorded half, burn and shares are kept from these; the joint
+  // simulation below replaces their projection, so project no further than now.
+  const recordedOnly = { ...options, horizonMs: 0, projectToMs: now };
+  const weeklyBase = buildPoolModel(weeklyInputs, recordedOnly);
+  const fiveBase = buildPoolModel(fiveInputs, recordedOnly);
   const ratio = estimateFivePerWeekly(weeklyInputs, fiveInputs, now);
   const k = ratio.value;
 
@@ -373,13 +388,10 @@ export function buildLinkedPoolModels(
   );
 
   // Demand in weekly account-percent of the biggest plan per hour. The 5-hour
-  // drain is measured in finer steps, so prefer it once the rate is known.
-  const fromFive =
-    fiveBase.burnPerHour !== null && ratio.source === 'history' ? fiveBase.burnPerHour / k : null;
+  // limit moves several times faster than the weekly one, whose whole-percent
+  // ticks can read as zero over a short window, so its measured burn wins.
   const measured =
-    fromFive ??
-    weeklyBase.burnPerHour ??
-    (fiveBase.burnPerHour !== null ? fiveBase.burnPerHour / k : null);
+    fiveBase.burnPerHour !== null ? fiveBase.burnPerHour / k : weeklyBase.burnPerHour;
   const demand = (measured ?? 0) * Math.max(0, futureFactor);
 
   /* ---------- simulation ---------- */
@@ -515,7 +527,10 @@ export function buildLinkedPoolModels(
   const combinedBase: PoolModel = {
     capacity: combinedAccounts.reduce((sum, a) => sum + a.share, 0),
     accountCount: keys.length,
-    current: rec.recorded.length ? rec.recorded[rec.recorded.length - 1].v : keys.length ? 0 : null,
+    // The live value at Now, which also anchors the chart when history is thin.
+    current: keys.length
+      ? state.reduce((sum, s) => sum + (views.combined.byAccount[s.key][0] ?? 0) * shareFrac(s), 0)
+      : null,
     burnPerHour: null,
     burnWindowHours,
     recorded: rec.recorded,
@@ -531,26 +546,15 @@ export function buildLinkedPoolModels(
     horizonEndMs: weeklyHorizon,
     accounts: combinedAccounts,
   };
-  if (combinedBase.current === null || rec.recorded.length === 0) {
-    // Recorded series too short to plot: the live value still anchors Now.
-    combinedBase.current = keys.length
-      ? state.reduce((sum, s) => sum + (views.combined.byAccount[s.key][0] ?? 0) * shareFrac(s), 0)
-      : null;
-  }
   const combined = withProjection(combinedBase, times, views.combined, {
     now,
     horizonEndMs: weeklyHorizon,
     burnPerHour: burn === null ? null : burn * k,
-    // Locked out until whichever limit binds next refills: the weekly reset
-    // when the weekly limit runs dry first, otherwise the next 5-hour window.
-    nextResetOf: (key) => {
-      const weeklyEmpty = weekly.accounts.find((a) => a.key === key)?.emptyAtMs ?? null;
-      const weeklyReset = nextWeekly(key);
-      const weeklyBinds =
-        weeklyEmpty !== null && (weeklyReset === null || weeklyEmpty < weeklyReset);
-      return weeklyBinds ? weeklyReset : (nextFive(key) ?? weeklyReset);
-    },
+    // A locked-out account is back when the projection first refills it,
+    // whichever limit was binding; otherwise its next 5-hour window.
+    nextResetOf: (key) => nextFive(key) ?? nextWeekly(key),
     beforeResetOnly: false,
+    resetFromRecovery: true,
   });
 
   return { weekly, fiveHour, combined, ratio };

@@ -1669,8 +1669,6 @@
     "pool_providers_combined": "Together",
     "pool_providers_toggle": "By provider",
     "pool_all_providers": "All providers",
-    "pool_provider_claude": "Claude",
-    "pool_provider_codex": "Codex",
     "pool_locked_out": "All locked out",
     "pool_first_lockout": "First lockout",
     "pool_no_lockout": "None in two weeks",

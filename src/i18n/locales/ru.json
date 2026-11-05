@@ -1672,8 +1672,6 @@
     "pool_providers_combined": "Вместе",
     "pool_providers_toggle": "По провайдерам",
     "pool_all_providers": "Все провайдеры",
-    "pool_provider_claude": "Claude",
-    "pool_provider_codex": "Codex",
     "pool_locked_out": "Всё заблокировано",
     "pool_first_lockout": "Первая блокировка",
     "pool_no_lockout": "Нет в ближайшие две недели",

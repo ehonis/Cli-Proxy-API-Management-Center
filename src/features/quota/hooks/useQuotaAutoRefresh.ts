@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { isRefreshDue } from './autoRefresh';
+import { isPollDue } from './autoRefresh';
 
 /** How often to check whether a refresh is due; the interval itself is coarser. */
 const CHECK_MS = 15_000;
@@ -15,8 +15,8 @@ export interface QuotaAutoRefreshOptions {
   /** False while disconnected or while the file list is loading. */
   enabled: boolean;
   intervalMs: number | null;
-  /** Last completed refresh; null until the page's first load lands. */
-  lastRefreshAt: number | null;
+  /** Oldest reading among the poll targets; null until one lands. */
+  oldestFetchedAt: number | null;
   /** Starts a refresh; resolves false when the loader was busy. */
   run: () => Promise<boolean>;
 }
@@ -24,28 +24,32 @@ export interface QuotaAutoRefreshOptions {
 export function useQuotaAutoRefresh({
   enabled,
   intervalMs,
-  lastRefreshAt,
+  oldestFetchedAt,
   run,
 }: QuotaAutoRefreshOptions) {
   // Read through refs so the timers are not torn down on every render.
-  const latest = useRef({ lastRefreshAt, run });
+  const latest = useRef({ oldestFetchedAt, run });
   useEffect(() => {
-    latest.current = { lastRefreshAt, run };
+    latest.current = { oldestFetchedAt, run };
   });
-  const inFlight = useRef(false);
+  const lastAttemptAt = useRef<number | null>(null);
 
   useEffect(() => {
     if (!enabled || intervalMs === null) return;
     const check = () => {
-      if (inFlight.current || document.visibilityState !== 'visible') return;
-      const { lastRefreshAt: last, run: start } = latest.current;
-      // The first load belongs to the page; the poller only keeps it fresh.
-      if (last === null || !isRefreshDue(last, Date.now(), intervalMs)) return;
-      inFlight.current = true;
-      void start()
-        .catch(() => false)
-        .finally(() => {
-          inFlight.current = false;
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (!isPollDue(latest.current.oldestFetchedAt, lastAttemptAt.current, now, intervalMs)) {
+        return;
+      }
+      const previous = lastAttemptAt.current;
+      lastAttemptAt.current = now;
+      void latest.current
+        .run()
+        .catch(() => true)
+        .then((started) => {
+          // Busy loader: nothing was attempted, so try again on the next check.
+          if (!started) lastAttemptAt.current = previous;
         });
     };
     const mountTimer = window.setTimeout(check, MOUNT_DELAY_MS);

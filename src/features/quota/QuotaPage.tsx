@@ -23,6 +23,7 @@ import { useAuthStore, useConfigStore, useQuotaStore, useThemeStore } from '@/st
 import type { AuthFileItem, ResolvedTheme } from '@/types';
 import { getQuotaCacheKey } from '@/utils/quota/identity';
 import { ProviderTabs } from '@/features/authFiles/components/ProviderTabs';
+import { getTypeLabel } from '@/features/authFiles/constants';
 import { QuotaHeader } from './components/QuotaHeader';
 import { QuotaCard } from './components/QuotaCard';
 import {
@@ -70,7 +71,6 @@ import {
   autoRefreshMs,
   type AutoRefreshInterval,
 } from './hooks/autoRefresh';
-import { useLastQuotaRefresh } from './hooks/quotaRefreshClock';
 import { useQuotaAutoRefresh } from './hooks/useQuotaAutoRefresh';
 import {
   isPoolProvider,
@@ -445,25 +445,38 @@ export function QuotaPage() {
     setAutoRefresh(next);
     writeAutoRefresh(next);
   }, []);
-  const lastBatchAt = useLastQuotaRefresh(sessionGeneration);
-  const fetchTimes = Object.values(fetchedAt);
-  // Single-credential refreshes count too, so the label never claims "never".
-  const updatedAt = fetchTimes.length > 0 ? Math.max(lastBatchAt ?? 0, ...fetchTimes) : lastBatchAt;
-  const runAutoRefresh = useCallback(() => {
-    // Everything already on screen, plus the pooled providers the chart needs.
-    // Devin is left out on purpose: it is queried once per visit, never polled.
-    const targets = entries.filter((entry) => {
-      if (entry.file.disabled || entry.type === 'devin') return false;
-      const quota = getQuota(entry);
-      if (quota?.status === 'loading') return false;
-      return quota !== undefined || isPoolProvider(entry.type);
-    });
-    return loadQuota(targets, { silent: true });
-  }, [entries, getQuota, loadQuota]);
+  // Everything already on screen, plus the pooled providers the chart needs.
+  // Devin is left out on purpose: it is queried once per visit, never polled.
+  const pollTargets = useMemo(
+    () =>
+      entries.filter((entry) => {
+        if (entry.file.disabled || entry.type === 'devin') return false;
+        return getQuota(entry) !== undefined || isPoolProvider(entry.type);
+      }),
+    [entries, getQuota]
+  );
+  // The oldest reading on screen: both the header's age and the poll's clock,
+  // so a failed poll never makes stale numbers look fresh.
+  const oldestFetchedAt = useMemo(() => {
+    let oldest: number | null = null;
+    for (const entry of pollTargets) {
+      const at = fetchedAt[getQuotaCacheKey(entry.file)];
+      if (at !== undefined && (oldest === null || at < oldest)) oldest = at;
+    }
+    return oldest;
+  }, [fetchedAt, pollTargets]);
+  const runAutoRefresh = useCallback(
+    () =>
+      loadQuota(
+        pollTargets.filter((entry) => getQuota(entry)?.status !== 'loading'),
+        { silent: true }
+      ),
+    [getQuota, loadQuota, pollTargets]
+  );
   useQuotaAutoRefresh({
     enabled: canUseActions && !error,
     intervalMs: autoRefreshMs(autoRefresh),
-    lastRefreshAt: lastBatchAt ?? (fetchTimes.length > 0 ? Math.min(...fetchTimes) : null),
+    oldestFetchedAt,
     run: runAutoRefresh,
   });
 
@@ -545,7 +558,7 @@ export function QuotaPage() {
     const parts = (pick: (card: PoolCardData) => PoolModel) =>
       providerCards.map((card) => ({
         key: card.type,
-        label: t(`quota_management.pool_provider_${card.type}`),
+        label: getTypeLabel(t, card.type),
         model: pick(card),
       }));
     const windows = providerCards.map((card) => card.windowsLeft);
@@ -640,7 +653,7 @@ export function QuotaPage() {
         onRefreshAll={handleRefreshAll}
         showEmails={showEmails}
         onToggleEmails={handleToggleEmails}
-        updatedAt={updatedAt}
+        updatedAt={oldestFetchedAt}
         now={now}
         autoRefresh={autoRefresh}
         onAutoRefreshChange={handleAutoRefreshChange}

@@ -15,7 +15,11 @@ import {
   fiveHourWindowsLeft,
 } from '../src/features/quota/pool/poolLinked';
 import { mergePoolModels } from '../src/features/quota/pool/poolMerge';
-import { autoRefreshMs, isRefreshDue } from '../src/features/quota/hooks/autoRefresh';
+import {
+  autoRefreshMs,
+  isPollDue,
+  keepsPreviousReading,
+} from '../src/features/quota/hooks/autoRefresh';
 
 const NOW = Date.UTC(2026, 10, 3, 18, 0, 0);
 
@@ -133,6 +137,30 @@ describe('linked projection', () => {
     expect(fiveHourWindowsLeft(linked)).toBeCloseTo(6.4, 5);
   });
 
+  test('with thin history the measured 5-hour burn still drives the projection', () => {
+    // Weekly has not ticked yet; the 5-hour window fell 30 points in two hours.
+    const { weekly, five } = pair({ weekly: 90, five: 50, weeklyDrop: 0, fiveDrop: 30 });
+    const { fiveHour, ratio } = buildLinkedPoolModels([weekly], [five], options);
+    expect(ratio.source).toBe('assumed');
+    expect(fiveHour.burnPerHour).toBeCloseTo(15, 0);
+    expect(at(fiveHour.projected, NOW + HOUR_MS)).toBeCloseTo(35, 0);
+  });
+
+  test('a locked-out account is back at its first refill, not a later weekly reset', () => {
+    // 5-hour empty now, refills in an hour; the weekly limit runs out later on.
+    const { weekly, five } = pair({
+      weekly: 10,
+      five: 0,
+      weeklyDrop: 4,
+      fiveDrop: 32,
+      fiveResetMs: NOW + HOUR_MS,
+    });
+    const { combined } = buildLinkedPoolModels([weekly], [five], options);
+    const account = combined.accounts[0];
+    expect(account.emptyAtMs).toBe(NOW);
+    expect(account.nextResetMs! - NOW).toBeLessThanOrEqual(HOUR_MS + 5 * 60_000);
+  });
+
   test('an account with no 5-hour window is limited by its weekly only', () => {
     const { weekly } = pair({ weekly: 50, five: 0, weeklyDrop: 0, fiveDrop: 0 });
     const linked = buildLinkedPoolModels([weekly], [], options);
@@ -189,13 +217,31 @@ describe('provider merge', () => {
 });
 
 describe('auto-refresh timing', () => {
-  test('is due once the interval has passed, never when off', () => {
-    const fiveMin = autoRefreshMs('5');
-    expect(fiveMin).toBe(5 * 60_000);
-    expect(isRefreshDue(NOW - 4 * 60_000, NOW, fiveMin)).toBe(false);
-    expect(isRefreshDue(NOW - 5 * 60_000, NOW, fiveMin)).toBe(true);
-    expect(isRefreshDue(null, NOW, fiveMin)).toBe(true);
-    expect(isRefreshDue(NOW - 60 * 60_000, NOW, autoRefreshMs('off'))).toBe(false);
+  const FIVE_MIN = autoRefreshMs('5')!;
+
+  test('is due once the oldest reading is an interval old', () => {
+    expect(FIVE_MIN).toBe(5 * 60_000);
+    expect(autoRefreshMs('off')).toBeNull();
+    expect(isPollDue(NOW - 4 * 60_000, null, NOW, FIVE_MIN)).toBe(false);
+    expect(isPollDue(NOW - 5 * 60_000, null, NOW, FIVE_MIN)).toBe(true);
+  });
+
+  test('leaves the first load to the page', () => {
+    expect(isPollDue(null, null, NOW, FIVE_MIN)).toBe(false);
+  });
+
+  test('retries a failing poll once per interval, not on every check', () => {
+    // The reading stayed old because the last attempt failed a minute ago.
+    expect(isPollDue(NOW - 30 * 60_000, NOW - 60_000, NOW, FIVE_MIN)).toBe(false);
+    expect(isPollDue(NOW - 30 * 60_000, NOW - FIVE_MIN, NOW, FIVE_MIN)).toBe(true);
+  });
+
+  test('a failed background poll keeps only a good previous reading', () => {
+    expect(keepsPreviousReading(true, 'error', { status: 'success' })).toBe(true);
+    expect(keepsPreviousReading(true, 'error', { status: 'error' })).toBe(false);
+    expect(keepsPreviousReading(true, 'error', undefined)).toBe(false);
+    expect(keepsPreviousReading(false, 'error', { status: 'success' })).toBe(false);
+    expect(keepsPreviousReading(true, 'success', { status: 'success' })).toBe(false);
   });
 });
 

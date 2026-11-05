@@ -16,13 +16,31 @@ export function autoRefreshMs(interval: AutoRefreshInterval): number | null {
 }
 
 /**
- * Due when nothing has refreshed yet in this session's view of the clock, or
- * the last refresh is at least one interval old.
+ * Due when the oldest reading on screen is at least one interval old, and no
+ * attempt was made within the last interval (so a failing credential is
+ * retried once per interval, not on every check). Before the first reading
+ * lands the page's own first load is in charge, so nothing is due.
  */
-export function isRefreshDue(lastAt: number | null, now: number, intervalMs: number | null) {
-  if (intervalMs === null) return false;
-  if (lastAt === null) return true;
-  return now - lastAt >= intervalMs;
+export function isPollDue(
+  oldestFetchedAt: number | null,
+  lastAttemptAt: number | null,
+  now: number,
+  intervalMs: number
+): boolean {
+  if (oldestFetchedAt === null || now - oldestFetchedAt < intervalMs) return false;
+  return lastAttemptAt === null || now - lastAttemptAt >= intervalMs;
+}
+
+/**
+ * Whether a background poll's failure should leave the previous reading on
+ * screen: only when that reading was a good one.
+ */
+export function keepsPreviousReading(
+  silent: boolean,
+  resultStatus: 'success' | 'error',
+  previous: { status?: string } | undefined
+): boolean {
+  return silent && resultStatus === 'error' && previous?.status === 'success';
 }
 
 const KEY = 'quotaPage.autoRefresh';

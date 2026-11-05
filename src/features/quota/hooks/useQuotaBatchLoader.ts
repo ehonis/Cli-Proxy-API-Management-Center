@@ -9,11 +9,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { markQuotaRefreshed } from './quotaRefreshClock';
 import { useTranslation } from 'react-i18next';
-import { captureQuotaCacheGeneration, commitIfQuotaCacheCurrent } from '@/stores';
+import { captureQuotaCacheGeneration, commitIfQuotaCacheCurrent, useQuotaStore } from '@/stores';
 import { getStatusFromError } from '@/utils/quota';
 import { getQuotaCacheKey } from '@/utils/quota/identity';
+import { keepsPreviousReading } from './autoRefresh';
 import type { QuotaFileEntry } from '../logic';
 import { QUOTA_ADAPTERS, getQuotaSetter, type QuotaCardState } from '../providers';
 import { enrichQuotaInBackground } from '../quotaEnrichment';
@@ -43,7 +43,7 @@ export function useQuotaBatchLoader() {
   const requestIdRef = useRef(0);
   const silentRef = useRef(false);
   /** A manual load that arrived while a background poll was running. */
-  const queuedRef = useRef<QuotaFileEntry[] | null>(null);
+  const queuedRef = useRef<{ targets: QuotaFileEntry[]; generation: number } | null>(null);
 
   const loadQuota = useCallback(
     async (targets: QuotaFileEntry[], options: LoadQuotaOptions = {}): Promise<boolean> => {
@@ -51,14 +51,20 @@ export function useQuotaBatchLoader() {
       const silent = options.silent === true;
       if (loadingRef.current) {
         // Never drop an explicit refresh behind a background poll; run it next.
-        if (!silent && silentRef.current) queuedRef.current = targets;
+        if (!silent && silentRef.current) {
+          queuedRef.current = {
+            targets,
+            generation: useQuotaStore.getState().cacheGeneration,
+          };
+        }
         return false;
       }
       silentRef.current = silent;
       loadingRef.current = true;
       const requestId = ++requestIdRef.current;
       const cacheGeneration = captureQuotaCacheGeneration();
-      setBatchLoading(true);
+      // A background poll stays invisible: no spinner, Refresh all stays usable.
+      if (!silent) setBatchLoading(true);
 
       try {
         const groups = new Map<QuotaProviderType, QuotaFileEntry[]>();
@@ -111,10 +117,7 @@ export function useQuotaBatchLoader() {
               const nextState = { ...prev };
               results.forEach((result) => {
                 // A failed background poll keeps the last good reading.
-                if (silent && result.status === 'error') {
-                  const previous = prev[result.cacheKey] as QuotaCardState | undefined;
-                  if (previous?.status === 'success') return;
-                }
+                if (keepsPreviousReading(silent, result.status, prev[result.cacheKey])) return;
                 commitIfQuotaCacheCurrent(
                   cacheGeneration,
                   () => {
@@ -140,7 +143,6 @@ export function useQuotaBatchLoader() {
             });
           })
         );
-        if (requestId === requestIdRef.current) markQuotaRefreshed(cacheGeneration.cacheGeneration);
         return true;
       } finally {
         if (requestId === requestIdRef.current) {
@@ -149,7 +151,10 @@ export function useQuotaBatchLoader() {
           silentRef.current = false;
           const queued = queuedRef.current;
           queuedRef.current = null;
-          if (queued) void loadQuotaRef.current(queued);
+          // Dropped if the session changed meanwhile: its targets belong to the old one.
+          if (queued && queued.generation === useQuotaStore.getState().cacheGeneration) {
+            void loadQuotaRef.current(queued.targets);
+          }
         }
       }
     },
