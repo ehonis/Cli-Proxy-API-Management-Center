@@ -242,7 +242,7 @@ describe('auto-refresh timing', () => {
     expect(isPollDue(NOW - 30 * 60_000, NOW - FIVE_MIN, NOW, FIVE_MIN)).toBe(true);
   });
 
-  test('a dead credential among good ones keeps the full cadence', () => {
+  test('a full poll comes at most one check after the interval', () => {
     // Checks every 15s; each full poll lands its good readings 2s later.
     const CHECK = 15_000;
     let oldest: number | null = 0;
