@@ -537,15 +537,25 @@ function projectedEmptyFor(times: number[], values: number[] | undefined, horizo
 /**
  * Visible range. Weekly: three days back to ten ahead, a week per step.
  * 5-hour: twelve hours back to a day and a half ahead, a day per step.
+ * Combined: a day back to a week ahead, a week per step, so every 5-hour
+ * window still reads as its own tooth.
  */
 export function poolViewRange(
   now: number,
   offset: number,
-  window: 'weekly' | 'five-hour' = 'weekly'
+  window: 'weekly' | 'five-hour' | 'combined' = 'weekly'
 ) {
   if (window === 'five-hour') {
     const startMs = Math.floor(now / HOUR_MS) * HOUR_MS - 12 * HOUR_MS + offset * DAY_MS;
     return { startMs, endMs: startMs + 2 * DAY_MS };
+  }
+  if (window === 'combined') {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 1 + offset * 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 8);
+    return { startMs: start.getTime(), endMs: end.getTime() };
   }
   const offsetWeeks = offset;
   const start = new Date(now);

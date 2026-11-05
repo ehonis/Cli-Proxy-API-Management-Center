@@ -3,7 +3,7 @@
 import type { PoolChartMode } from './PoolChart';
 import type { QuietHours } from './poolModel';
 
-export const POOL_WINDOWS = ['weekly', 'five-hour'] as const;
+export const POOL_WINDOWS = ['weekly', 'five-hour', 'combined'] as const;
 export type PoolWindow = (typeof POOL_WINDOWS)[number];
 
 export const BURN_WINDOWS = [1, 3, 6] as const;
@@ -15,7 +15,12 @@ export const BURN_WINDOWS = [1, 3, 6] as const;
 export const OFFSET_LIMITS: Record<PoolWindow, { min: number; max: number }> = {
   weekly: { min: -2, max: 1 },
   'five-hour': { min: -14, max: 1 },
+  combined: { min: -2, max: 1 },
 };
+
+/** One card per provider, or every provider added into one pool. */
+export const POOL_PROVIDER_MODES = ['separate', 'combined'] as const;
+export type PoolProviderMode = (typeof POOL_PROVIDER_MODES)[number];
 export type BurnWindow = (typeof BURN_WINDOWS)[number];
 
 export const FUTURE_USAGE = ['same', 'double', 'half', 'none'] as const;
@@ -96,6 +101,7 @@ export interface PoolSettings {
   quiet: QuietHoursId;
   offDays: number[];
   showAccounts: boolean;
-  /** Pages away from today: weeks in weekly view, days in 5-hour view. */
+  providers: PoolProviderMode;
+  /** Pages away from today: weeks in weekly and combined view, days in 5-hour view. */
   offset: number;
 }

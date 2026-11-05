@@ -35,6 +35,8 @@ export interface PoolChartProps {
   idle?: IdleSchedule;
   /** Accessible name, e.g. "Claude pool". */
   label: string;
+  /** Smallest refill worth a label, in pool percent. */
+  minResetLabel?: number;
 }
 
 const HEIGHT = 380;
@@ -90,6 +92,7 @@ export function PoolChart({
   hourly = false,
   idle,
   label,
+  minResetLabel = 0,
 }: PoolChartProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage;
@@ -191,7 +194,7 @@ export function PoolChart({
       title: string;
     }[] = [];
     for (const reset of model.resets) {
-      if (reset.t < startMs || reset.t > endMs) continue;
+      if (reset.t < startMs || reset.t > endMs || reset.delta < minResetLabel) continue;
       const series = reset.projected ? model.projected : model.recorded;
       const v = valueAt(series, reset.t + 1) ?? valueAt(series, reset.t);
       if (v === null) continue;
@@ -227,7 +230,7 @@ export function PoolChart({
     return out;
     // x/y depend on width and yMax, both captured via plotW/yMax.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rateMode, model, startMs, endMs, plotW, yMax, locale, now]);
+  }, [rateMode, model, startMs, endMs, plotW, yMax, locale, now, minResetLabel]);
 
   /* ---------- axes ---------- */
 

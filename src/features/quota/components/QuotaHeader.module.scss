@@ -55,6 +55,14 @@
   color: var(--text-tertiary);
 }
 
+.metaUpdated {
+  color: var(--text-tertiary);
+}
+
+.autoRefresh {
+  min-width: 132px;
+}
+
 .metaMuted {
   color: var(--text-tertiary);
 }
@@ -68,8 +76,10 @@
 .actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* Quiet filled button: secondary header action (Show emails). */

@@ -10,7 +10,8 @@ export type QuotaViewMode = 'ledger' | 'cards';
 
 export type QuotaPoolUiState = {
   mode?: 'remaining' | 'rate';
-  window?: 'weekly' | 'five-hour';
+  window?: 'weekly' | 'five-hour' | 'combined';
+  providers?: 'separate' | 'combined';
   burnWindow?: 1 | 3 | 6;
   future?: 'same' | 'double' | 'half' | 'none';
   showAccounts?: boolean;
@@ -30,7 +31,14 @@ const readPoolState = (raw: unknown): QuotaPoolUiState | undefined => {
   const value = raw as Record<string, unknown>;
   return {
     mode: value.mode === 'rate' || value.mode === 'remaining' ? value.mode : undefined,
-    window: value.window === 'weekly' || value.window === 'five-hour' ? value.window : undefined,
+    window:
+      value.window === 'weekly' || value.window === 'five-hour' || value.window === 'combined'
+        ? value.window
+        : undefined,
+    providers:
+      value.providers === 'separate' || value.providers === 'combined'
+        ? value.providers
+        : undefined,
     burnWindow:
       value.burnWindow === 1 || value.burnWindow === 3 || value.burnWindow === 6
         ? value.burnWindow

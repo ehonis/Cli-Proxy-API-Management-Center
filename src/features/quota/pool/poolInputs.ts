@@ -21,10 +21,11 @@ import {
   type PoolAccountInput,
   type PoolSamplePoint,
 } from './poolModel';
-import type { PoolWindow } from './poolSettings';
 import { rememberedPlanSize } from './planSizeCache';
 
 export const POOL_PROVIDERS = ['claude', 'codex'] as const;
+/** A single limit an account reports; the combined view is built from both. */
+export type PooledLimit = 'weekly' | 'five-hour';
 export type PoolProvider = (typeof POOL_PROVIDERS)[number];
 
 export const isPoolProvider = (type: QuotaProviderType | string): type is PoolProvider =>
@@ -34,12 +35,12 @@ const WEEKLY_MINUTES = 7 * 24 * 60;
 
 type LiveWindow = { usedPercent: number | null; resetAtMs: number | null; periodMs: number };
 
-const defaultPeriodMs = (window: PoolWindow) => (window === 'weekly' ? WEEK_MS : FIVE_HOUR_MS);
+const defaultPeriodMs = (window: PooledLimit) => (window === 'weekly' ? WEEK_MS : FIVE_HOUR_MS);
 
 function liveWindowFromQuota(
   provider: PoolProvider,
   quota: QuotaCardState | undefined,
-  pooled: PoolWindow
+  pooled: PooledLimit
 ): LiveWindow | null {
   if (!quota || quota.status !== 'success') return null;
   const windows =
@@ -60,7 +61,7 @@ function liveWindowFromQuota(
 }
 
 /** Pick the recorded window that matches the pooled one. */
-function windowFromSample(provider: PoolProvider, sample: QuotaHistorySample, pooled: PoolWindow) {
+function windowFromSample(provider: PoolProvider, sample: QuotaHistorySample, pooled: PooledLimit) {
   if (provider === 'claude') {
     return (pooled === 'weekly' ? sample.windows.seven_day : sample.windows.five_hour) ?? null;
   }
@@ -129,7 +130,7 @@ export function poolInputsFor(
   history: Map<string, QuotaHistorySample[]>,
   fetchedAt: (entry: QuotaFileEntry) => number | null,
   showEmails = false,
-  pooled: PoolWindow = 'weekly'
+  pooled: PooledLimit = 'weekly'
 ): PoolAccountInput[] {
   return entries
     .filter((entry) => entry.type === provider && !entry.file.disabled)

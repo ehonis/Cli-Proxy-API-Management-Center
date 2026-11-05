@@ -61,7 +61,17 @@ import {
   writeQuietHours,
   type PoolSettings,
 } from './pool/poolSettings';
-import { buildPoolModel, DAY_MS, poolViewRange, type RoutingStrategy } from './pool/poolModel';
+import { DAY_MS, poolViewRange, type PoolModel, type RoutingStrategy } from './pool/poolModel';
+import { buildLinkedPoolModels, fiveHourWindowsLeft } from './pool/poolLinked';
+import { mergePoolModels } from './pool/poolMerge';
+import {
+  readAutoRefresh,
+  writeAutoRefresh,
+  autoRefreshMs,
+  type AutoRefreshInterval,
+} from './hooks/autoRefresh';
+import { useLastQuotaRefresh } from './hooks/quotaRefreshClock';
+import { useQuotaAutoRefresh } from './hooks/useQuotaAutoRefresh';
 import {
   isPoolProvider,
   POOL_PROVIDERS,
@@ -104,6 +114,7 @@ export function QuotaPage() {
       quiet: readQuietHours(),
       offDays: readOffDays(),
       showAccounts: saved?.showAccounts ?? false,
+      providers: saved?.providers ?? 'separate',
       offset: 0,
     };
   });
@@ -427,6 +438,35 @@ export function QuotaPage() {
     [fetchedAt]
   );
 
+  /* ---------- background refresh ---------- */
+
+  const [autoRefresh, setAutoRefresh] = useState<AutoRefreshInterval>(readAutoRefresh);
+  const handleAutoRefreshChange = useCallback((next: AutoRefreshInterval) => {
+    setAutoRefresh(next);
+    writeAutoRefresh(next);
+  }, []);
+  const lastBatchAt = useLastQuotaRefresh(sessionGeneration);
+  const fetchTimes = Object.values(fetchedAt);
+  // Single-credential refreshes count too, so the label never claims "never".
+  const updatedAt = fetchTimes.length > 0 ? Math.max(lastBatchAt ?? 0, ...fetchTimes) : lastBatchAt;
+  const runAutoRefresh = useCallback(() => {
+    // Everything already on screen, plus the pooled providers the chart needs.
+    // Devin is left out on purpose: it is queried once per visit, never polled.
+    const targets = entries.filter((entry) => {
+      if (entry.file.disabled || entry.type === 'devin') return false;
+      const quota = getQuota(entry);
+      if (quota?.status === 'loading') return false;
+      return quota !== undefined || isPoolProvider(entry.type);
+    });
+    return loadQuota(targets, { silent: true });
+  }, [entries, getQuota, loadQuota]);
+  useQuotaAutoRefresh({
+    enabled: canUseActions && !error,
+    intervalMs: autoRefreshMs(autoRefresh),
+    lastRefreshAt: lastBatchAt ?? (fetchTimes.length > 0 ? Math.min(...fetchTimes) : null),
+    run: runAutoRefresh,
+  });
+
   const configuredStrategy = useConfigStore((state) => state.config?.routingStrategy);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
   useEffect(() => {
@@ -444,36 +484,28 @@ export function QuotaPage() {
     () => poolViewRange(now, poolSettings.offset, poolSettings.window),
     [now, poolSettings.offset, poolSettings.window]
   );
-  const poolCards = useMemo<PoolCardData[]>(
+  // One joint weekly + 5-hour simulation per provider feeds every view, so a
+  // run-dry weekly limit shows up in the 5-hour chart and the other way round.
+  const linkedPools = useMemo(
     () =>
-      POOL_PROVIDERS.filter((type) => tab === 'all' || tab === type)
-        .map((type) => ({
+      POOL_PROVIDERS.filter((type) => tab === 'all' || tab === type).map((type) => {
+        const inputs = (limit: 'weekly' | 'five-hour') =>
+          poolInputsFor(type, entries, getQuota, historyByAuth, fetchedAtFor, showEmails, limit);
+        return {
           type,
-          model: buildPoolModel(
-            poolInputsFor(
-              type,
-              entries,
-              getQuota,
-              historyByAuth,
-              fetchedAtFor,
-              showEmails,
-              poolSettings.window
-            ),
-            {
-              now,
-              burnWindowHours: poolSettings.burnWindow,
-              futureFactor: FUTURE_FACTOR[poolSettings.future],
-              quietHours: quietHoursOf(poolSettings.quiet),
-              offDays: poolSettings.offDays,
-              // Paging forward must not starve the burn rate of recorded history.
-              recordedFromMs: Math.min(range.startMs, now),
-              projectToMs: Math.min(range.endMs, now + 21 * DAY_MS),
-              horizonMs: poolSettings.window === 'five-hour' ? 2 * DAY_MS : undefined,
-              strategy,
-            }
-          ),
-        }))
-        .filter((card) => card.model.accountCount > 0),
+          linked: buildLinkedPoolModels(inputs('weekly'), inputs('five-hour'), {
+            now,
+            burnWindowHours: poolSettings.burnWindow,
+            futureFactor: FUTURE_FACTOR[poolSettings.future],
+            quietHours: quietHoursOf(poolSettings.quiet),
+            offDays: poolSettings.offDays,
+            // Paging forward must not starve the burn rate of recorded history.
+            recordedFromMs: Math.min(range.startMs, now),
+            projectToMs: Math.min(range.endMs, now + 21 * DAY_MS),
+            strategy,
+          }),
+        };
+      }),
     [
       entries,
       fetchedAtFor,
@@ -484,16 +516,64 @@ export function QuotaPage() {
       poolSettings.future,
       poolSettings.quiet,
       poolSettings.offDays,
-      poolSettings.window,
       range,
       showEmails,
       strategy,
       tab,
     ]
   );
+  const providerCards = useMemo<PoolCardData[]>(
+    () =>
+      linkedPools
+        .map(({ type, linked }) => ({
+          type,
+          model:
+            poolSettings.window === 'weekly'
+              ? linked.weekly
+              : poolSettings.window === 'five-hour'
+                ? linked.fiveHour
+                : linked.combined,
+          weekly: linked.weekly,
+          windowsLeft: fiveHourWindowsLeft(linked),
+          ratios: [{ type, ratio: linked.ratio }],
+        }))
+        .filter((card) => card.model.accountCount > 0),
+    [linkedPools, poolSettings.window]
+  );
+  const poolCards = useMemo<PoolCardData[]>(() => {
+    if (poolSettings.providers !== 'combined' || providerCards.length < 2) return providerCards;
+    const parts = (pick: (card: PoolCardData) => PoolModel) =>
+      providerCards.map((card) => ({
+        key: card.type,
+        label: t(`quota_management.pool_provider_${card.type}`),
+        model: pick(card),
+      }));
+    const windows = providerCards.map((card) => card.windowsLeft);
+    return [
+      {
+        type: 'all',
+        model: mergePoolModels(
+          parts((card) => card.model),
+          now
+        ),
+        weekly: mergePoolModels(
+          parts((card) => card.weekly),
+          now
+        ),
+        windowsLeft: windows.every((w) => w === null)
+          ? null
+          : windows.reduce<number>((sum, w) => sum + (w ?? 0), 0),
+        ratios: providerCards.flatMap((card) => card.ratios),
+      },
+    ];
+  }, [now, poolSettings.providers, providerCards, t]);
+  // The ledger groups by provider, so it always reads the per-provider pools.
   const pools = useMemo(
-    () => Object.fromEntries(poolCards.map((card) => [card.type, card.model])),
-    [poolCards]
+    () =>
+      Object.fromEntries(providerCards.map((card) => [card.type, card.model])) as Partial<
+        Record<QuotaProviderType, PoolModel>
+      >,
+    [providerCards]
   );
 
   const handlePoolSettingsChange = useCallback(
@@ -508,6 +588,7 @@ export function QuotaPage() {
             burnWindow: next.burnWindow,
             future: next.future,
             showAccounts: next.showAccounts,
+            providers: next.providers,
           },
         });
         return next;
@@ -559,6 +640,10 @@ export function QuotaPage() {
         onRefreshAll={handleRefreshAll}
         showEmails={showEmails}
         onToggleEmails={handleToggleEmails}
+        updatedAt={updatedAt}
+        now={now}
+        autoRefresh={autoRefresh}
+        onAutoRefreshChange={handleAutoRefreshChange}
       />
 
       <section className={styles.workbench}>
@@ -583,6 +668,7 @@ export function QuotaPage() {
             now={now}
             resolvedTheme={resolvedTheme}
             historyLoading={history.status === 'loading'}
+            providerCount={providerCards.length}
           />
         )}
 

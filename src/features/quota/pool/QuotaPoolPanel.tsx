@@ -20,6 +20,7 @@ import {
   BURN_WINDOWS,
   FUTURE_USAGE,
   OFFSET_LIMITS,
+  POOL_PROVIDER_MODES,
   POOL_WINDOWS,
   QUIET_HOURS,
   normalizeOffDays,
@@ -27,9 +28,11 @@ import {
   type BurnWindow,
   type FutureUsage,
   type QuietHoursId,
+  type PoolProviderMode,
   type PoolSettings,
   type PoolWindow,
 } from './poolSettings';
+import type { WindowRatio } from './poolLinked';
 import { DAY_MS, type PoolModel } from './poolModel';
 import {
   bandOpacity,
@@ -44,8 +47,16 @@ import type { PoolProvider } from './poolInputs';
 import styles from './QuotaPoolPanel.module.scss';
 
 export interface PoolCardData {
-  type: PoolProvider;
+  /** A provider, or 'all' for every provider added into one pool. */
+  type: PoolProvider | 'all';
+  /** The model for the selected view. */
   model: PoolModel;
+  /** The weekly model, for the combined view's "weekly runs out" figure. */
+  weekly: PoolModel;
+  /** Full 5-hour windows the remaining weekly limit still buys. */
+  windowsLeft: number | null;
+  /** Weekly-to-5-hour exchange rate per provider. */
+  ratios: { type: PoolProvider; ratio: WindowRatio }[];
 }
 
 export interface QuotaPoolPanelProps {
@@ -59,11 +70,14 @@ export interface QuotaPoolPanelProps {
   resolvedTheme: ResolvedTheme;
   /** True until the first history response (or its failure) lands. */
   historyLoading: boolean;
+  /** Providers with a pool, before any merging; the merge toggle needs two. */
+  providerCount: number;
 }
 
-const ACCENTS: Record<PoolProvider, { dark: string; light: string }> = {
+const ACCENTS: Record<PoolProvider | 'all', { dark: string; light: string }> = {
   claude: { dark: '#ef7f63', light: '#d4593b' },
   codex: { dark: '#9b95ff', light: '#5b54e0' },
+  all: { dark: '#5cc8b2', light: '#1d8572' },
 };
 
 function Segmented<T extends string | number>({
@@ -155,6 +169,17 @@ function ProviderIcon({ type, resolvedTheme }: { type: string; resolvedTheme: Re
   );
 }
 
+function CardIcon({ card, resolvedTheme }: { card: PoolCardData; resolvedTheme: ResolvedTheme }) {
+  if (card.type !== 'all') return <ProviderIcon type={card.type} resolvedTheme={resolvedTheme} />;
+  return (
+    <span className={styles.iconStack}>
+      {card.ratios.map(({ type }) => (
+        <ProviderIcon key={type} type={type} resolvedTheme={resolvedTheme} />
+      ))}
+    </span>
+  );
+}
+
 function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className={styles.stat}>
@@ -182,7 +207,9 @@ function PoolCard({
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage;
   const { model } = card;
-  const name = getTypeLabel(t, card.type);
+  const name =
+    card.type === 'all' ? t('quota_management.pool_all_providers') : getTypeLabel(t, card.type);
+  const combinedView = settings.window === 'combined';
   const accent = ACCENTS[card.type][resolvedTheme === 'dark' ? 'dark' : 'light'];
 
   const poolEmpty = model.poolEmptyAtMs
@@ -191,6 +218,22 @@ function PoolCard({
   const firstEmpty = model.firstEmpty
     ? `${model.firstEmpty.label} · ${formatWhen(model.firstEmpty.t, now, locale)}`
     : t('quota_management.pool_none_before_reset');
+  const weeklyEmpty = card.weekly.poolEmptyAtMs
+    ? formatWhen(card.weekly.poolEmptyAtMs, now, locale)
+    : t('quota_management.pool_not_by', { date: formatMonthDay(card.weekly.horizonEndMs, locale) });
+  const ratioNote = card.ratios
+    .map(({ type, ratio }) =>
+      t(
+        ratio.source === 'history'
+          ? 'quota_management.pool_ratio_history'
+          : 'quota_management.pool_ratio_assumed',
+        {
+          name: card.ratios.length > 1 ? `${getTypeLabel(t, type)}: ` : '',
+          value: ratio.value < 10 ? ratio.value.toFixed(1) : Math.round(ratio.value),
+        }
+      )
+    )
+    .join(' · ');
 
   return (
     <article
@@ -200,7 +243,7 @@ function PoolCard({
     >
       <header className={styles.cardHead}>
         <div className={styles.cardTitle}>
-          <ProviderIcon type={card.type} resolvedTheme={resolvedTheme} />
+          <CardIcon card={card} resolvedTheme={resolvedTheme} />
           <h2>{name}</h2>
           <span className={styles.cardCount}>
             {t('quota_management.pool_accounts', { count: model.accountCount })}
@@ -213,27 +256,57 @@ function PoolCard({
               {t('quota_management.pool_of', { total: formatPercent(model.capacity) })}
             </span>
           </div>
-          <dl className={styles.stats}>
-            <Stat label={t('quota_management.pool_empty')}>
-              <span className={model.poolEmptyAtMs ? styles.warn : undefined}>{poolEmpty}</span>
-            </Stat>
-            <Stat label={t('quota_management.pool_first_empty')}>
-              <span className={model.firstEmpty ? styles.warn : undefined}>{firstEmpty}</span>
-            </Stat>
-            <Stat label={t('quota_management.pool_next_reset')}>
-              {model.nextReset ? (
-                <>
-                  <strong>+{Math.round(model.nextReset.delta)}%</strong>{' '}
-                  {formatWhen(model.nextReset.t, now, locale)}
-                </>
-              ) : (
-                t('quota_management.pool_no_reset')
-              )}
-            </Stat>
-            <Stat label={t('quota_management.pool_burn', { hours: model.burnWindowHours })}>
-              {historyLoading && model.burnPerHour === null ? '…' : formatRate(model.burnPerHour)}
-            </Stat>
-          </dl>
+          {combinedView ? (
+            <dl className={styles.stats}>
+              <Stat label={t('quota_management.pool_locked_out')}>
+                <span className={model.poolEmptyAtMs ? styles.warn : undefined}>{poolEmpty}</span>
+              </Stat>
+              <Stat label={t('quota_management.pool_first_lockout')}>
+                <span className={model.firstEmpty ? styles.warn : undefined}>
+                  {model.firstEmpty
+                    ? `${model.firstEmpty.label} · ${formatWhen(model.firstEmpty.t, now, locale)}`
+                    : t('quota_management.pool_no_lockout')}
+                </span>
+              </Stat>
+              <Stat label={t('quota_management.pool_weekly_runs_out')}>
+                <span className={card.weekly.poolEmptyAtMs ? styles.warn : undefined}>
+                  {weeklyEmpty}
+                </span>
+              </Stat>
+              <Stat label={t('quota_management.pool_windows_left')}>
+                {card.windowsLeft === null
+                  ? '--'
+                  : t('quota_management.pool_windows_left_value', {
+                      value:
+                        card.windowsLeft < 10
+                          ? card.windowsLeft.toFixed(1)
+                          : Math.round(card.windowsLeft),
+                    })}
+              </Stat>
+            </dl>
+          ) : (
+            <dl className={styles.stats}>
+              <Stat label={t('quota_management.pool_empty')}>
+                <span className={model.poolEmptyAtMs ? styles.warn : undefined}>{poolEmpty}</span>
+              </Stat>
+              <Stat label={t('quota_management.pool_first_empty')}>
+                <span className={model.firstEmpty ? styles.warn : undefined}>{firstEmpty}</span>
+              </Stat>
+              <Stat label={t('quota_management.pool_next_reset')}>
+                {model.nextReset ? (
+                  <>
+                    <strong>+{Math.round(model.nextReset.delta)}%</strong>{' '}
+                    {formatWhen(model.nextReset.t, now, locale)}
+                  </>
+                ) : (
+                  t('quota_management.pool_no_reset')
+                )}
+              </Stat>
+              <Stat label={t('quota_management.pool_burn', { hours: model.burnWindowHours })}>
+                {historyLoading && model.burnPerHour === null ? '…' : formatRate(model.burnPerHour)}
+              </Stat>
+            </dl>
+          )}
         </div>
       </header>
 
@@ -247,13 +320,17 @@ function PoolCard({
         showAccounts={settings.showAccounts}
         idle={{ quietHours: quietHoursOf(settings.quiet), offDays: settings.offDays }}
         label={name}
+        // Every 5-hour window refills in the combined view; label only the big ones.
+        minResetLabel={combinedView ? model.capacity / 4 : 0}
       />
 
       <footer className={styles.legend}>
         <span className={styles.legendTitle}>
           {settings.mode === 'rate'
             ? t('quota_management.pool_legend_rate')
-            : t('quota_management.pool_legend_pool')}
+            : combinedView
+              ? t('quota_management.pool_legend_usable')
+              : t('quota_management.pool_legend_pool')}
         </span>
         <span className={styles.legendItem}>
           <span className={styles.swatchSolid} />
@@ -280,6 +357,14 @@ function PoolCard({
               {account.label}
             </span>
           ))}
+        <span className={styles.legendNote}>
+          {t('quota_management.pool_linked_note')}
+          {!combinedView || settings.mode === 'rate' || !model.burnPerHour
+            ? ''
+            : ` · ${t('quota_management.pool_burn', { hours: model.burnWindowHours })} ${formatRate(model.burnPerHour)}`}
+          {' · '}
+          {ratioNote}
+        </span>
       </footer>
     </article>
   );
@@ -293,6 +378,7 @@ export function QuotaPoolPanel({
   now,
   resolvedTheme,
   historyLoading,
+  providerCount,
 }: QuotaPoolPanelProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage;
@@ -322,10 +408,23 @@ export function QuotaPoolPanel({
             label: t(
               value === 'weekly'
                 ? 'quota_management.pool_window_weekly'
-                : 'quota_management.pool_window_five_hour'
+                : value === 'five-hour'
+                  ? 'quota_management.pool_window_five_hour'
+                  : 'quota_management.pool_window_combined'
             ),
           }))}
         />
+        {providerCount > 1 && (
+          <Segmented<PoolProviderMode>
+            label={t('quota_management.pool_providers')}
+            value={settings.providers}
+            onChange={(providers) => onSettingsChange({ providers })}
+            options={POOL_PROVIDER_MODES.map((value) => ({
+              value,
+              label: t(`quota_management.pool_providers_${value}`),
+            }))}
+          />
+        )}
         <Segmented<PoolChartMode>
           label={t('quota_management.pool_view')}
           value={settings.mode}
@@ -406,7 +505,9 @@ export function QuotaPoolPanel({
           disabled={settings.mode !== 'remaining'}
           onClick={() => onSettingsChange((prev) => ({ showAccounts: !prev.showAccounts }))}
         >
-          {t('quota_management.pool_accounts_toggle')}
+          {cards.some((card) => card.type === 'all')
+            ? t('quota_management.pool_providers_toggle')
+            : t('quota_management.pool_accounts_toggle')}
         </button>
       </div>
 
