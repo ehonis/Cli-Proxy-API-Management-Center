@@ -9,7 +9,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DAY_MS, HOUR_MS, type PoolModel, type SeriesPoint } from './poolModel';
+import {
+  DAY_MS,
+  HOUR_MS,
+  idleSpans,
+  type PoolModel,
+  type IdleSchedule,
+  type SeriesPoint,
+} from './poolModel';
 import { bandOpacity, formatPercent, formatRate, formatStamp } from './poolFormat';
 import styles from './PoolChart.module.scss';
 
@@ -22,6 +29,10 @@ export interface PoolChartProps {
   endMs: number;
   now: number;
   showAccounts: boolean;
+  /** Hour columns instead of day columns, for the 5-hour view. */
+  hourly?: boolean;
+  /** Nightly block with no projected usage, shaded from now onward. */
+  idle?: IdleSchedule;
   /** Accessible name, e.g. "Claude pool". */
   label: string;
 }
@@ -76,6 +87,8 @@ export function PoolChart({
   endMs,
   now,
   showAccounts,
+  hourly = false,
+  idle,
   label,
 }: PoolChartProps) {
   const { t, i18n } = useTranslation();
@@ -227,6 +240,29 @@ export function PoolChart({
       weekend: boolean;
       today: boolean;
     }[] = [];
+    if (hourly) {
+      // Three-hour columns, wider on a narrow chart; midnight carries the date.
+      const stepHours = plotW / ((endMs - startMs) / HOUR_MS) < 14 ? 6 : 3;
+      const d = new Date(startMs);
+      d.setMinutes(0, 0, 0);
+      d.setHours(Math.ceil(d.getHours() / stepHours) * stepHours);
+      while (d.getTime() < endMs) {
+        const colStart = d.getTime();
+        const next = new Date(d);
+        next.setHours(next.getHours() + stepHours);
+        const midnight = d.getHours() === 0;
+        out.push({
+          t: colStart,
+          end: Math.min(next.getTime(), endMs),
+          weekday: d.toLocaleTimeString(locale, { hour: 'numeric' }),
+          day: midnight ? d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' }) : '',
+          weekend: false,
+          today: now >= colStart && now < next.getTime(),
+        });
+        d.setTime(next.getTime());
+      }
+      return out;
+    }
     const todayStart = new Date(now).setHours(0, 0, 0, 0);
     // Step by calendar day, not 24h: a DST change makes one day 23 or 25 hours.
     const d = new Date(startMs);
@@ -246,16 +282,17 @@ export function PoolChart({
       d.setDate(d.getDate() + 1);
     }
     return out;
-  }, [startMs, endMs, now, locale]);
+  }, [startMs, endMs, now, locale, hourly, plotW]);
 
   // Thin the day labels when days get narrow; today always keeps its label.
   const pxPerDay = plotW / Math.max(1, days.length);
-  const labelEvery = pxPerDay < 18 ? 3 : pxPerDay < 34 ? 2 : 1;
+  const labelEvery = hourly ? (pxPerDay < 34 ? 2 : 1) : pxPerDay < 18 ? 3 : pxPerDay < 34 ? 2 : 1;
   const anchor = Math.max(
     0,
     days.findIndex((day) => day.today)
   );
-  const showDayLabel = (index: number) => Math.abs(index - anchor) % labelEvery === 0;
+  const showDayLabel = (index: number) =>
+    Math.abs(index - anchor) % labelEvery === 0 || (hourly && days[index].day !== '');
 
   const yTicks = [0, yMax / 2, yMax];
   const tickLabel = (v: number) =>
@@ -277,7 +314,11 @@ export function PoolChart({
       const base = isProjected ? model.projected : model.recorded;
       const byAccount = isProjected ? model.projectedByAccount : model.recordedByAccount;
       const idx = indexAt(base, hoverT);
-      accounts = model.accounts.map((a) => ({ label: a.label, v: byAccount[a.key]?.[idx] ?? 0 }));
+      // Each account's own level, not its weighted share of the pool.
+      accounts = model.accounts.map((a) => ({
+        label: a.label,
+        v: ((byAccount[a.key]?.[idx] ?? 0) * 100) / a.share,
+      }));
     }
     return { t: hoverT, v, isProjected, accounts };
   }, [hoverT, now, projected, recorded, rateMode, showAccounts, model]);
@@ -293,7 +334,13 @@ export function PoolChart({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step = event.shiftKey ? DAY_MS : HOUR_MS;
+    const step = hourly
+      ? event.shiftKey
+        ? HOUR_MS
+        : 15 * 60_000
+      : event.shiftKey
+        ? DAY_MS
+        : HOUR_MS;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
       setHoverT((prev) => {
@@ -340,6 +387,18 @@ export function PoolChart({
             <rect x={M.left} y={0} width={plotW} height={M.top + plotH} />
           </clipPath>
         </defs>
+
+        {/* quiet hours and off days: only the projection assumes them, so shade the future */}
+        {idleSpans(Math.max(startMs, now), endMs, idle ?? {}).map((span) => (
+          <rect
+            key={`q${span.startMs}`}
+            className={styles.quietBand}
+            x={x(span.startMs)}
+            y={M.top}
+            width={Math.max(0, x(span.endMs) - x(span.startMs))}
+            height={plotH}
+          />
+        ))}
 
         {/* day columns + horizontal guides */}
         {days.map((day) => (
@@ -434,12 +493,12 @@ export function PoolChart({
             <text
               key={`x${day.t}`}
               className={`${styles.xLabel} ${day.today ? styles.xLabelToday : ''}`}
-              x={x((day.t + day.end) / 2)}
+              x={x(hourly ? day.t : (day.t + day.end) / 2)}
               y={M.top + plotH + 20}
               textAnchor="middle"
             >
-              <tspan x={x((day.t + day.end) / 2)}>{day.weekday}</tspan>
-              <tspan x={x((day.t + day.end) / 2)} dy={17}>
+              <tspan x={x(hourly ? day.t : (day.t + day.end) / 2)}>{day.weekday}</tspan>
+              <tspan x={x(hourly ? day.t : (day.t + day.end) / 2)} dy={17}>
                 {day.day}
               </tspan>
             </text>

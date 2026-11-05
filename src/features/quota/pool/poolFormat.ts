@@ -20,6 +20,10 @@ export const formatMonthDay = (ms: number, locale?: string) =>
 export const formatClock = (ms: number, locale?: string) =>
   new Date(ms).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
 
+/** "10 PM" for an hour of the day, in the viewer's locale convention. */
+export const formatHourOfDay = (hour: number, locale?: string) =>
+  new Date(2000, 0, 1, hour).toLocaleTimeString(locale, { hour: 'numeric' });
+
 /** "Tue 10:00 AM" within the coming week, "Nov 12, 10:00 AM" beyond it. */
 export const formatWhen = (ms: number, now: number, locale?: string) => {
   const date = new Date(ms);

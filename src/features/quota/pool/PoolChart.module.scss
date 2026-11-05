@@ -19,6 +19,11 @@
   user-select: none;
 }
 
+.quietBand {
+  fill: var(--text-primary);
+  opacity: 0.045;
+}
+
 .dayLine {
   stroke: var(--pool-grid);
   stroke-width: 1;

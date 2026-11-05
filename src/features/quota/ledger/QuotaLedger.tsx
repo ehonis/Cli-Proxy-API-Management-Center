@@ -415,7 +415,7 @@ export function QuotaLedger({
               {total !== null && (
                 <span className={styles.groupPool}>
                   <b>{formatPercent(total)}</b>{' '}
-                  {t('quota_management.ledger_of_pool', { total: `${capacity}%` })}
+                  {t('quota_management.ledger_of_pool', { total: formatPercent(capacity) })}
                 </span>
               )}
               {pool?.nextReset && (

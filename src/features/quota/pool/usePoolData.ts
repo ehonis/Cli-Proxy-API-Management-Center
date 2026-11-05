@@ -10,7 +10,8 @@ import { getQuotaCacheKey } from '@/utils/quota/identity';
 import { getStatusFromError } from '@/utils/quota';
 import type { QuotaFileEntry } from '../logic';
 import type { QuotaCardState } from '../providers';
-import { historyWindowsFromQuota, isPoolProvider } from './poolInputs';
+import { historyWindowsFromQuota, isPoolProvider, planSize } from './poolInputs';
+import { rememberPlanSize } from './planSizeCache';
 
 const HISTORY_HOURS = 21 * 24;
 const HISTORY_POLL_MS = 2 * 60_000;
@@ -93,6 +94,10 @@ export function useQuotaFetchTimes(
       if (!landedAt.has(quota)) {
         landedAt.set(quota, Date.now());
         fresh = true;
+        if (isPoolProvider(entry.type)) {
+          const size = planSize(entry.type, quota);
+          if (size !== null) rememberPlanSize(getQuotaCacheKey(entry.file), size);
+        }
       }
       // Only report once the endpoint is known to exist; results that landed
       // earlier are sent as soon as it is.

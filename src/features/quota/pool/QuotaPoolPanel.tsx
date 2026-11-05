@@ -19,14 +19,27 @@ import { PoolChart, type PoolChartMode } from './PoolChart';
 import {
   BURN_WINDOWS,
   FUTURE_USAGE,
-  MAX_OFFSET_WEEKS,
-  MIN_OFFSET_WEEKS,
+  OFFSET_LIMITS,
+  POOL_WINDOWS,
+  QUIET_HOURS,
+  normalizeOffDays,
+  quietHoursOf,
   type BurnWindow,
   type FutureUsage,
+  type QuietHoursId,
   type PoolSettings,
+  type PoolWindow,
 } from './poolSettings';
 import { DAY_MS, type PoolModel } from './poolModel';
-import { bandOpacity, formatMonthDay, formatPercent, formatRate, formatWhen } from './poolFormat';
+import {
+  bandOpacity,
+  formatClock,
+  formatHourOfDay,
+  formatMonthDay,
+  formatPercent,
+  formatRate,
+  formatWhen,
+} from './poolFormat';
 import type { PoolProvider } from './poolInputs';
 import styles from './QuotaPoolPanel.module.scss';
 
@@ -77,6 +90,50 @@ function Segmented<T extends string | number>({
           {option.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Sunday-first, matching the chart's day columns. */
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+function weekdayName(day: number, locale: string | undefined, width: 'narrow' | 'long') {
+  // Jan 2, 2000 was a Sunday.
+  return new Date(2000, 0, 2 + day).toLocaleDateString(locale, { weekday: width });
+}
+
+function OffDayToggles({
+  value,
+  onChange,
+  label,
+  locale,
+}: {
+  value: number[];
+  onChange: (days: number[]) => void;
+  label: string;
+  locale: string | undefined;
+}) {
+  return (
+    <div className={styles.segmented} role="group" aria-label={label}>
+      {WEEKDAYS.map((day) => {
+        const name = weekdayName(day, locale, 'long');
+        const on = value.includes(day);
+        return (
+          <button
+            key={day}
+            type="button"
+            aria-pressed={on}
+            aria-label={name}
+            title={name}
+            className={`${styles.segment} ${styles.daySegment}`}
+            onClick={() =>
+              onChange(normalizeOffDays(on ? value.filter((d) => d !== day) : [...value, day]))
+            }
+          >
+            {weekdayName(day, locale, 'narrow')}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -153,7 +210,7 @@ function PoolCard({
           <div className={styles.bigValue}>
             <span className={styles.big}>{formatPercent(model.current)}</span>
             <span className={styles.of}>
-              {t('quota_management.pool_of', { total: `${model.capacity}%` })}
+              {t('quota_management.pool_of', { total: formatPercent(model.capacity) })}
             </span>
           </div>
           <dl className={styles.stats}>
@@ -183,10 +240,12 @@ function PoolCard({
       <PoolChart
         model={model}
         mode={settings.mode}
+        hourly={settings.window === 'five-hour'}
         startMs={range.startMs}
         endMs={range.endMs}
         now={now}
         showAccounts={settings.showAccounts}
+        idle={{ quietHours: quietHoursOf(settings.quiet), offDays: settings.offDays }}
         label={name}
       />
 
@@ -204,6 +263,12 @@ function PoolCard({
           <span className={styles.swatchDashed} />
           {t('quota_management.pool_legend_projected')}
         </span>
+        {(settings.quiet !== 'off' || settings.offDays.length > 0) && (
+          <span className={styles.legendItem}>
+            <span className={styles.swatchQuiet} />
+            {t('quota_management.pool_legend_quiet')}
+          </span>
+        )}
         {settings.showAccounts &&
           settings.mode === 'remaining' &&
           model.accounts.map((account, index) => (
@@ -233,14 +298,34 @@ export function QuotaPoolPanel({
   const locale = i18n.resolvedLanguage;
   if (cards.length === 0) return null;
 
-  const rangeText = t('quota_management.pool_range', {
-    from: formatMonthDay(range.startMs, locale),
-    to: formatMonthDay(range.endMs - DAY_MS, locale),
-  });
+  const limits = OFFSET_LIMITS[settings.window];
+  const rangeText =
+    settings.window === 'five-hour'
+      ? t('quota_management.pool_range', {
+          from: `${formatMonthDay(range.startMs, locale)} ${formatClock(range.startMs, locale)}`,
+          to: `${formatMonthDay(range.endMs, locale)} ${formatClock(range.endMs, locale)}`,
+        })
+      : t('quota_management.pool_range', {
+          from: formatMonthDay(range.startMs, locale),
+          to: formatMonthDay(range.endMs - DAY_MS, locale),
+        });
 
   return (
     <section className={styles.panel} aria-label={t('quota_management.pool_section')}>
       <div className={styles.controls}>
+        <Segmented<PoolWindow>
+          label={t('quota_management.pool_window')}
+          value={settings.window}
+          onChange={(window) => onSettingsChange({ window, offset: 0 })}
+          options={POOL_WINDOWS.map((value) => ({
+            value,
+            label: t(
+              value === 'weekly'
+                ? 'quota_management.pool_window_weekly'
+                : 'quota_management.pool_window_five_hour'
+            ),
+          }))}
+        />
         <Segmented<PoolChartMode>
           label={t('quota_management.pool_view')}
           value={settings.mode}
@@ -279,6 +364,41 @@ export function QuotaPoolPanel({
             />
           </div>
         </div>
+        <div className={styles.labelled}>
+          <span className={styles.controlLabel} id="pool-quiet-label">
+            {t('quota_management.pool_quiet')}
+          </span>
+          <div className={styles.futureSelect}>
+            <Select
+              value={settings.quiet}
+              onChange={(value) => onSettingsChange({ quiet: value as QuietHoursId })}
+              ariaLabelledBy="pool-quiet-label"
+              ariaLabel={t('quota_management.pool_quiet')}
+              size="sm"
+              options={QUIET_HOURS.map((value) => {
+                const hours = quietHoursOf(value);
+                return {
+                  value,
+                  label: hours
+                    ? t('quota_management.pool_quiet_range', {
+                        from: formatHourOfDay(hours.startHour, locale),
+                        to: formatHourOfDay(hours.endHour, locale),
+                      })
+                    : t('quota_management.pool_quiet_off'),
+                };
+              })}
+            />
+          </div>
+        </div>
+        <div className={styles.labelled}>
+          <span className={styles.controlLabel}>{t('quota_management.pool_off_days')}</span>
+          <OffDayToggles
+            value={settings.offDays}
+            onChange={(offDays) => onSettingsChange({ offDays })}
+            label={t('quota_management.pool_off_days')}
+            locale={locale}
+          />
+        </div>
         <button
           type="button"
           className={styles.toggle}
@@ -297,8 +417,8 @@ export function QuotaPoolPanel({
         <button
           type="button"
           className={styles.navButton}
-          onClick={() => onSettingsChange((prev) => ({ offsetWeeks: prev.offsetWeeks - 1 }))}
-          disabled={settings.offsetWeeks <= MIN_OFFSET_WEEKS}
+          onClick={() => onSettingsChange((prev) => ({ offset: prev.offset - 1 }))}
+          disabled={settings.offset <= limits.min}
           aria-label={t('quota_management.windows_prev')}
           title={t('quota_management.windows_prev')}
         >
@@ -307,16 +427,16 @@ export function QuotaPoolPanel({
         <button
           type="button"
           className={styles.todayButton}
-          onClick={() => onSettingsChange({ offsetWeeks: 0 })}
-          data-current={settings.offsetWeeks === 0 ? 'true' : 'false'}
+          onClick={() => onSettingsChange({ offset: 0 })}
+          data-current={settings.offset === 0 ? 'true' : 'false'}
         >
           {t('quota_management.windows_today')}
         </button>
         <button
           type="button"
           className={`${styles.navButton} ${styles.navNext}`}
-          onClick={() => onSettingsChange((prev) => ({ offsetWeeks: prev.offsetWeeks + 1 }))}
-          disabled={settings.offsetWeeks >= MAX_OFFSET_WEEKS}
+          onClick={() => onSettingsChange((prev) => ({ offset: prev.offset + 1 }))}
+          disabled={settings.offset >= limits.max}
           aria-label={t('quota_management.windows_next')}
           title={t('quota_management.windows_next')}
         >

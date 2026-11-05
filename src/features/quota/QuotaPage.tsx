@@ -52,9 +52,22 @@ import { useQuotaBatchLoader } from './hooks/useQuotaBatchLoader';
 import { readQuotaUiState, writeQuotaUiState, type QuotaViewMode } from './uiState';
 import { QuotaLedger } from './ledger/QuotaLedger';
 import { QuotaPoolPanel, type PoolCardData } from './pool/QuotaPoolPanel';
-import { FUTURE_FACTOR, type PoolSettings } from './pool/poolSettings';
+import {
+  FUTURE_FACTOR,
+  quietHoursOf,
+  readOffDays,
+  readQuietHours,
+  writeOffDays,
+  writeQuietHours,
+  type PoolSettings,
+} from './pool/poolSettings';
 import { buildPoolModel, DAY_MS, poolViewRange, type RoutingStrategy } from './pool/poolModel';
-import { POOL_PROVIDERS, poolInputsFor, samplesByAuthIndex } from './pool/poolInputs';
+import {
+  isPoolProvider,
+  POOL_PROVIDERS,
+  poolInputsFor,
+  samplesByAuthIndex,
+} from './pool/poolInputs';
 import { useQuotaFetchTimes, useQuotaHistory } from './pool/usePoolData';
 import styles from './QuotaPage.module.scss';
 
@@ -85,10 +98,13 @@ export function QuotaPage() {
     return {
       // Always open on Remaining, like a fresh look at the pool.
       mode: 'remaining',
+      window: saved?.window ?? 'weekly',
       burnWindow: saved?.burnWindow ?? 3,
       future: saved?.future ?? 'same',
+      quiet: readQuietHours(),
+      offDays: readOffDays(),
       showAccounts: saved?.showAccounts ?? false,
-      offsetWeeks: 0,
+      offset: 0,
     };
   });
   const [collapsed, setCollapsed] = useState<Set<string>>(
@@ -338,15 +354,22 @@ export function QuotaPage() {
     viewMode,
   ]);
 
-  // Ledger view is a live overview: load every credential once per session
-  // the first time the file list settles, then only on explicit refresh.
-  const autoLoadedSessionRef = useRef<number | null>(null);
+  // Load once per session, the first time the file list settles, then only on
+  // explicit refresh. The ledger is a live overview, so it loads every
+  // credential; the cards view still loads the pooled providers (Claude, Codex)
+  // so the pool chart and its plan sizes never wait on a manual refresh.
+  const autoLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (viewMode !== 'ledger') return;
     if (disableControls || loading || error || filesGeneration !== sessionGeneration) return;
-    if (autoLoadedSessionRef.current === sessionGeneration) return;
-    const unloaded = entries.filter((entry) => !getQuota(entry) && !entry.file.disabled);
-    autoLoadedSessionRef.current = sessionGeneration;
+    const scope = `${sessionGeneration}:${viewMode === 'ledger' ? 'all' : 'pool'}`;
+    if (autoLoadedRef.current === scope) return;
+    const unloaded = entries.filter(
+      (entry) =>
+        !getQuota(entry) &&
+        !entry.file.disabled &&
+        (viewMode === 'ledger' || isPoolProvider(entry.type))
+    );
+    autoLoadedRef.current = scope;
     if (unloaded.length > 0) void loadQuota(unloaded);
   }, [
     disableControls,
@@ -418,8 +441,8 @@ export function QuotaPage() {
 
   const historyByAuth = useMemo(() => samplesByAuthIndex(history.samples), [history.samples]);
   const range = useMemo(
-    () => poolViewRange(now, poolSettings.offsetWeeks),
-    [now, poolSettings.offsetWeeks]
+    () => poolViewRange(now, poolSettings.offset, poolSettings.window),
+    [now, poolSettings.offset, poolSettings.window]
   );
   const poolCards = useMemo<PoolCardData[]>(
     () =>
@@ -427,14 +450,25 @@ export function QuotaPage() {
         .map((type) => ({
           type,
           model: buildPoolModel(
-            poolInputsFor(type, entries, getQuota, historyByAuth, fetchedAtFor, showEmails),
+            poolInputsFor(
+              type,
+              entries,
+              getQuota,
+              historyByAuth,
+              fetchedAtFor,
+              showEmails,
+              poolSettings.window
+            ),
             {
               now,
               burnWindowHours: poolSettings.burnWindow,
               futureFactor: FUTURE_FACTOR[poolSettings.future],
+              quietHours: quietHoursOf(poolSettings.quiet),
+              offDays: poolSettings.offDays,
               // Paging forward must not starve the burn rate of recorded history.
               recordedFromMs: Math.min(range.startMs, now),
               projectToMs: Math.min(range.endMs, now + 21 * DAY_MS),
+              horizonMs: poolSettings.window === 'five-hour' ? 2 * DAY_MS : undefined,
               strategy,
             }
           ),
@@ -448,6 +482,9 @@ export function QuotaPage() {
       now,
       poolSettings.burnWindow,
       poolSettings.future,
+      poolSettings.quiet,
+      poolSettings.offDays,
+      poolSettings.window,
       range,
       showEmails,
       strategy,
@@ -463,8 +500,11 @@ export function QuotaPage() {
     (patch: Partial<PoolSettings> | ((prev: PoolSettings) => Partial<PoolSettings>)) => {
       setPoolSettings((prev) => {
         const next = { ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) };
+        if (next.quiet !== prev.quiet) writeQuietHours(next.quiet);
+        if (next.offDays !== prev.offDays) writeOffDays(next.offDays);
         writeQuotaUiState({
           pool: {
+            window: next.window,
             burnWindow: next.burnWindow,
             future: next.future,
             showAccounts: next.showAccounts,

@@ -227,7 +227,10 @@ describe('partial loading', () => {
         ],
       });
     const model = buildPoolModel(
-      [account({ key: 'live', remaining: 60, resetAtMs: NOW + 150 * HOUR_MS }), ...['b', 'c', 'd'].map(history)],
+      [
+        account({ key: 'live', remaining: 60, resetAtMs: NOW + 150 * HOUR_MS }),
+        ...['b', 'c', 'd'].map(history),
+      ],
       options
     );
     // ~9%/h in total. Soonest-reset ties break by key, so "b" drains first
@@ -266,5 +269,50 @@ describe('view range', () => {
     expect(end.getHours()).toBe(0);
     const next = poolViewRange(NOW, 1);
     expect(Math.round((next.startMs - range.startMs) / (24 * HOUR_MS))).toBe(7);
+  });
+});
+
+describe('plan-weighted pool', () => {
+  test('sizes each account against the biggest plan', () => {
+    const model = buildPoolModel(
+      [
+        account({ key: 'team', label: 'team', remaining: 50, size: 5 }),
+        account({ key: 'pro', label: 'pro', remaining: 50, size: 1 }),
+      ],
+      options
+    );
+    // Max 5x seat = 100%, Pro = 20%.
+    expect(model.capacity).toBeCloseTo(120, 5);
+    expect(model.current).toBeCloseTo(60, 5);
+    expect(model.accounts.find((a) => a.key === 'pro')?.share).toBeCloseTo(20, 5);
+  });
+
+  test('a reset adds back only the account’s own share', () => {
+    const model = buildPoolModel(
+      [
+        account({ key: 'team', remaining: 100, size: 5, resetAtMs: NOW + 100 * HOUR_MS }),
+        account({ key: 'pro', remaining: 0, size: 1, resetAtMs: NOW + 2 * HOUR_MS }),
+      ],
+      { ...options, futureFactor: 0 }
+    );
+    expect(model.nextReset?.delta).toBeCloseTo(20, 5);
+  });
+
+  test('equal sizes keep the old 100% per account', () => {
+    const model = buildPoolModel(
+      [account({ key: 'a' }), account({ key: 'b', label: 'b' })],
+      options
+    );
+    expect(model.capacity).toBe(200);
+  });
+});
+
+describe('5-hour view range', () => {
+  test('spans two days starting twelve hours back, a day per page', () => {
+    const range = poolViewRange(NOW, 0, 'five-hour');
+    expect(range.endMs - range.startMs).toBe(48 * HOUR_MS);
+    expect(range.startMs).toBe(NOW - 12 * HOUR_MS);
+    const next = poolViewRange(NOW, 1, 'five-hour');
+    expect(next.startMs - range.startMs).toBe(24 * HOUR_MS);
   });
 });
