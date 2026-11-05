@@ -17,6 +17,8 @@ export type ProviderTabsProps = {
   active: string;
   resolvedTheme: ResolvedTheme;
   onChange: (type: string) => void;
+  /** `underline` (default) for the credential library, `pill` for the quota page. */
+  variant?: 'underline' | 'pill';
 };
 
 /**
@@ -29,6 +31,7 @@ export function ProviderTabs({
   active,
   resolvedTheme,
   onChange,
+  variant = 'underline',
 }: ProviderTabsProps) {
   const { t } = useTranslation();
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -43,7 +46,10 @@ export function ProviderTabs({
   }, []);
 
   return (
-    <div ref={tabsRef} className={styles.tabs} role="group" aria-label={t('auth_files.filter_all')}>
+    <div
+      ref={tabsRef}
+      className={`${styles.tabs} ${variant === 'pill' ? styles.pill : ''}`}
+      role="group" aria-label={t('auth_files.filter_all')}>
       {types.map((type) => {
         const isActive = active === type;
         const label = type === 'all' ? t('auth_files.filter_all') : getTypeLabel(t, type);

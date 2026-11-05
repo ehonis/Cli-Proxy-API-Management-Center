@@ -1,0 +1,411 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------- controls ---------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.labelled {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controlLabel {
+  color: var(--text-tertiary);
+  font-size: 14.5px;
+  white-space: nowrap;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--pool-control-bg);
+}
+
+.segment {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+
+  &[aria-pressed='true'] {
+    background: var(--pool-control-active);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not([aria-pressed='true']) {
+      color: var(--text-primary);
+    }
+  }
+}
+
+.daySegment {
+  min-width: 34px;
+  padding: 0 8px;
+}
+
+.futureSelect {
+  min-width: 150px;
+
+  button[aria-haspopup='listbox'] {
+    height: 44px;
+    padding-left: 16px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--pool-control-bg);
+    box-shadow: none;
+    color: var(--text-primary);
+    font-size: 14.5px;
+    font-weight: 500;
+  }
+}
+
+.toggle {
+  height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--pool-control-bg);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    background: var(--pool-control-active);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px var(--border-hover);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      color: var(--text-primary);
+    }
+  }
+}
+
+/* ---------- range navigator ---------- */
+
+.rangeRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.rangeText {
+  margin-right: 10px;
+  color: var(--text-tertiary);
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.navButton,
+.todayButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: var(--pool-control-bg);
+      color: var(--text-primary);
+    }
+  }
+}
+
+.navButton {
+  width: 40px;
+}
+
+.navNext svg {
+  transform: scaleX(-1);
+}
+
+.todayButton {
+  padding: 0 18px;
+  background: var(--pool-control-bg);
+  color: var(--text-primary);
+  font-size: 14.5px;
+  font-weight: 500;
+
+  &[data-current='false'] {
+    color: var(--text-secondary);
+  }
+}
+
+/* ---------- card ---------- */
+
+.card {
+  --pool-card-bg: var(--pool-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 24px 24px 18px;
+  border: 1px solid var(--pool-card-border);
+  border-radius: 16px;
+  background: var(--pool-surface);
+  container-type: inline-size;
+}
+
+.cardHead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 17px;
+    font-weight: 600;
+  }
+}
+
+.cardCount {
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.providerIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  flex-shrink: 0;
+
+  img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+  }
+}
+
+.cardBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 32px;
+}
+
+.bigValue {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.big {
+  color: var(--text-primary);
+  font-size: 50px;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.of {
+  color: var(--text-tertiary);
+  font-size: 17px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, auto));
+  gap: 6px 36px;
+  margin: 0 0 6px;
+}
+
+.stat {
+  min-width: 0;
+
+  dt {
+    color: var(--text-tertiary);
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+
+  dd {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+}
+
+.warn {
+  color: var(--amber-text, #fcd34d);
+}
+
+/* ---------- legend ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  padding-left: 8px;
+  color: var(--text-tertiary);
+  font-size: 13.5px;
+}
+
+.legendTitle {
+  color: var(--text-secondary);
+  margin-right: 14px;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatchSolid,
+.swatchDashed {
+  display: inline-block;
+  width: 20px;
+  height: 0;
+  border-top: 2px solid var(--pool-accent);
+}
+
+.swatchDashed {
+  border-top-style: dashed;
+}
+
+.swatchBand {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--pool-accent);
+}
+
+.swatchQuiet {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--text-primary);
+  opacity: 0.12;
+}
+
+.legendNote {
+  color: var(--text-tertiary);
+}
+
+@container (max-width: 860px) {
+  .stats {
+    gap: 6px 22px;
+  }
+
+  .cardBody {
+    column-gap: 20px;
+  }
+}
+
+@container (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, auto));
+    gap: 6px 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 18px 14px 14px;
+  }
+
+  .big {
+    font-size: 40px;
+  }
+
+  .rangeRow {
+    justify-content: flex-start;
+  }
+}
+
+.iconStack {
+  display: inline-flex;
+
+  > span + span {
+    margin-left: -8px;
+    box-shadow: 0 0 0 2px var(--pool-card-bg);
+  }
+}
+
+.legendNote {
+  flex-basis: 100%;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}

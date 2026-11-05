@@ -5,7 +5,8 @@
 
 .header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  padding-top: 40px;
   justify-content: space-between;
   gap: 16px 24px;
   flex-wrap: wrap;
@@ -13,16 +14,18 @@
 
 .copy {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
+  flex: 1 1 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 280px;
 }
 
 .title {
   margin: 0;
-  font-size: clamp(26px, 3.2vw, 30px);
+  font-size: clamp(26px, 3.2vw, 32px);
   line-height: 1.15;
-  font-weight: 700;
+  font-weight: 650;
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
@@ -33,22 +36,10 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 4px 8px;
-  font-family: $font-mono;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: var(--text-secondary);
-
-  /* 终端游标：结构记号，与凭证库 meta 行同语汇 */
-  &::before {
-    content: '▍';
-    color: var(--viz-success);
-    font-size: 13px;
-    line-height: 1;
-    align-self: center;
-    margin-right: 1px;
-  }
+  color: var(--text-tertiary);
 }
 
 .metaDot {
@@ -57,11 +48,19 @@
 }
 
 .metaTotal {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
 .metaLoaded {
-  color: var(--viz-success);
+  color: var(--text-tertiary);
+}
+
+.metaUpdated {
+  color: var(--text-tertiary);
+}
+
+.autoRefresh {
+  min-width: 132px;
 }
 
 .metaMuted {
@@ -77,22 +76,26 @@
 .actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
-/* Outlined pill: secondary header action (Show emails). */
+/* Quiet filled button: secondary header action (Show emails). */
 .secondaryAction {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border-color);
+  gap: 9px;
+  height: 44px;
+  border: 0;
   cursor: pointer;
-  background: transparent;
+  background: var(--pool-control-bg);
   color: var(--text-primary);
-  border-radius: $radius-full;
-  padding: 9px 18px;
-  font-size: 13.5px;
-  font-weight: 600;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1;
   transition: background-color var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
 
@@ -117,12 +120,13 @@
   gap: 7px;
   border: 0;
   cursor: pointer;
+  height: 44px;
   background: var(--text-primary);
   color: var(--bg-secondary);
-  border-radius: $radius-full;
-  padding: 10px 18px;
-  font-size: 13.5px;
-  font-weight: 600;
+  border-radius: 12px;
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1;
   transition:
     transform var(--dur-press, 160ms) var(--ease-out-strong, ease-out),
@@ -146,9 +150,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .primaryAction:hover:not(:disabled) {
-    transform: translateY(-1px);
-    background: color-mix(in srgb, var(--text-primary) 86%, var(--bg-secondary));
-    box-shadow: 0 12px 26px color-mix(in srgb, var(--text-primary) 22%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 88%, var(--bg-secondary));
   }
 }
 
@@ -166,10 +168,19 @@
   .header {
     align-items: stretch;
     flex-direction: column;
+    padding-top: 0;
   }
 
   .actions {
     justify-content: flex-start;
+
+    > button {
+      flex: 1 1 0;
+      justify-content: center;
+      padding: 0 12px;
+      font-size: 14px;
+      white-space: nowrap;
+    }
   }
 }
 

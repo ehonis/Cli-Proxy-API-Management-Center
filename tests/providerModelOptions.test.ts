@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import i18n from '@/i18n';
 import {
   readModelOptions,
   buildModelOptions,
@@ -183,25 +184,21 @@ describe('provider model options', () => {
       })
     );
 
+  const label = (key: string) => i18n.t(`providersPage.modelOptions.${key}`);
+
   test('gates fields by provider capability', () => {
     const vertex = render('vertex');
-    expect(vertex).toContain('providersPage.modelOptions.displayName');
-    expect(vertex).toContain('providersPage.modelOptions.forceMapping');
-    expect(vertex).not.toContain('providersPage.modelOptions.maxContextLength');
-    expect(vertex).not.toContain('providersPage.modelOptions.isCompat');
+    expect(vertex).toContain(label('displayName'));
+    expect(vertex).toContain(label('forceMapping'));
+    expect(vertex).not.toContain(label('maxContextLength'));
+    expect(vertex).not.toContain(label('isCompat'));
     for (const brand of ['gemini', 'codex', 'openaiCompatibility'] as const) {
       const html = render(brand);
-      expect(html).toContain('providersPage.modelOptions.maxContextLength');
-      expect(html).toContain('providersPage.modelOptions.isCompat');
-      expect(html.includes('providersPage.modelOptions.supportConfigurationUpdate')).toBe(
-        brand === 'codex'
-      );
-      expect(html.includes('providersPage.modelOptions.inputModalitiesText')).toBe(
-        brand === 'openaiCompatibility'
-      );
-      expect(html.includes('providersPage.modelOptions.useMaxCompletionTokens')).toBe(
-        brand === 'openaiCompatibility'
-      );
+      expect(html).toContain(label('maxContextLength'));
+      expect(html).toContain(label('isCompat'));
+      expect(html.includes(label('supportConfigurationUpdate'))).toBe(brand === 'codex');
+      expect(html.includes(label('inputModalitiesText'))).toBe(brand === 'openaiCompatibility');
+      expect(html.includes(label('useMaxCompletionTokens'))).toBe(brand === 'openaiCompatibility');
     }
   });
 

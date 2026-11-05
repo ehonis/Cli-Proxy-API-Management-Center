@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { IconRefreshCw } from '@/components/ui/icons';
+import { IconEye, IconEyeOff, IconRefreshCw } from '@/components/ui/icons';
 import { useCountUp } from '@/hooks/motion';
+import { Select } from '@/components/ui/Select';
+import { AUTO_REFRESH_INTERVALS, type AutoRefreshInterval } from '../hooks/autoRefresh';
+import { formatDuration } from '../pool/poolFormat';
 import styles from './QuotaHeader.module.scss';
 
 export type QuotaHeaderProps = {
@@ -12,6 +15,11 @@ export type QuotaHeaderProps = {
   onRefreshAll: () => void;
   showEmails?: boolean;
   onToggleEmails?: () => void;
+  /** Last time quota numbers landed; null before the first load. */
+  updatedAt?: number | null;
+  now?: number;
+  autoRefresh?: AutoRefreshInterval;
+  onAutoRefreshChange?: (interval: AutoRefreshInterval) => void;
 };
 
 /**
@@ -31,6 +39,10 @@ export function QuotaHeader(props: QuotaHeaderProps) {
     onRefreshAll,
     showEmails,
     onToggleEmails,
+    updatedAt = null,
+    now = 0,
+    autoRefresh,
+    onAutoRefreshChange,
   } = props;
   const { t } = useTranslation();
   // 批量结果陆续落地时，「已加载」是页面上唯一滚动的数字
@@ -52,6 +64,20 @@ export function QuotaHeader(props: QuotaHeaderProps) {
           <span className={loadedCount > 0 ? styles.metaLoaded : styles.metaMuted}>
             {t('quota_management.meta_loaded', { count: displayLoadedCount })}
           </span>
+          {updatedAt !== null && now > 0 && (
+            <>
+              <span className={styles.metaDot} aria-hidden="true">
+                ·
+              </span>
+              <span className={styles.metaUpdated} title={new Date(updatedAt).toLocaleString()}>
+                {now - updatedAt < 60_000
+                  ? t('quota_management.updated_just_now')
+                  : t('quota_management.updated_ago', {
+                      duration: formatDuration(now - updatedAt),
+                    })}
+              </span>
+            </>
+          )}
           {attentionCount > 0 && (
             <>
               <span className={styles.metaDot} aria-hidden="true">
@@ -65,6 +91,23 @@ export function QuotaHeader(props: QuotaHeaderProps) {
         </p>
       </div>
       <div className={styles.actions} data-reveal>
+        {autoRefresh && onAutoRefreshChange && (
+          <div className={styles.autoRefresh}>
+            <Select
+              value={autoRefresh}
+              onChange={(value) => onAutoRefreshChange(value as AutoRefreshInterval)}
+              ariaLabel={t('quota_management.auto_refresh')}
+              size="sm"
+              options={AUTO_REFRESH_INTERVALS.map((value) => ({
+                value,
+                label:
+                  value === 'off'
+                    ? t('quota_management.auto_refresh_off')
+                    : t('quota_management.auto_refresh_every', { count: Number(value) }),
+              }))}
+            />
+          </div>
+        )}
         {onToggleEmails && (
           <button
             type="button"
@@ -72,6 +115,11 @@ export function QuotaHeader(props: QuotaHeaderProps) {
             onClick={onToggleEmails}
             aria-pressed={Boolean(showEmails)}
           >
+            {showEmails ? (
+              <IconEyeOff size={16} aria-hidden="true" />
+            ) : (
+              <IconEye size={16} aria-hidden="true" />
+            )}
             {showEmails ? t('quota_management.hide_emails') : t('quota_management.show_emails')}
           </button>
         )}
@@ -82,7 +130,7 @@ export function QuotaHeader(props: QuotaHeaderProps) {
           disabled={disableControls || refreshing}
         >
           <IconRefreshCw size={14} className={refreshing ? styles.spinning : undefined} />
-          {t('quota_management.refresh')}
+          {t('quota_management.refresh_all')}
         </button>
       </div>
     </header>
