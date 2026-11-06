@@ -267,8 +267,8 @@ export function buildAccountTrack(account: PoolAccountInput, now: number): Serie
 
 /** Value of a track at t: linear inside a segment, latest value on a jump. */
 export function trackValueAt(track: SeriesPoint[], t: number): number | null {
-  if (track.length === 0) return null;
-  if (t <= track[0].t) return track[0].v;
+  if (track.length === 0 || t < track[0].t) return null;
+  if (t === track[0].t) return track[0].v;
   let lo = 0;
   let hi = track.length - 1;
   if (t >= track[hi].t) return track[hi].v;
@@ -334,9 +334,15 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
     Number.isFinite(firstSample) ? alignDown(firstSample, STEP_MS) : now
   );
 
-  const recordedTimes: number[] = [];
-  for (let t = recordedStart; t < now; t += STEP_MS) recordedTimes.push(t);
-  recordedTimes.push(now);
+  const recordedInstants = new Set<number>([now]);
+  for (let t = recordedStart; t < now; t += STEP_MS) recordedInstants.add(t);
+  for (const track of tracks.values()) {
+    if (track.length && track[0].t > recordedStart) {
+      recordedInstants.add(track[0].t - 1);
+      recordedInstants.add(track[0].t);
+    }
+  }
+  const recordedTimes = [...recordedInstants].sort((a, b) => a - b);
 
   const recordedByAccount: Record<string, number[]> = {};
   const consumption: number[] = recordedTimes.map(() => 0);

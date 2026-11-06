@@ -23,10 +23,10 @@ export interface PoolMergePart {
   model: PoolModel;
 }
 
-/** Value at t, held flat outside the series instead of dropping to nothing. */
+/** No recorded value before the first observation; hold the last value afterward. */
 function heldValueAt(series: SeriesPoint[], t: number): number {
-  if (series.length === 0) return 0;
-  if (t <= series[0].t) return series[0].v;
+  if (series.length === 0 || t < series[0].t) return 0;
+  if (t === series[0].t) return series[0].v;
   const last = series[series.length - 1];
   if (t >= last.t) return last.v;
   let lo = 0;
@@ -45,6 +45,10 @@ function heldValueAt(series: SeriesPoint[], t: number): number {
 function unionTimes(seriesList: SeriesPoint[][]) {
   const set = new Set<number>();
   for (const series of seriesList) for (const p of series) set.add(p.t);
+  const earliest = Math.min(...set);
+  for (const series of seriesList) {
+    if (series.length && series[0].t > earliest) set.add(series[0].t - 1);
+  }
   return [...set].sort((a, b) => a - b);
 }
 
@@ -60,12 +64,15 @@ const sumNullable = (values: (number | null)[]) =>
 
 export function mergePoolModels(parts: PoolMergePart[], now: number): PoolModel {
   const models = parts.map((p) => p.model);
-  const recorded = sumSeries(models.map((m) => m.recorded));
+  const recordedParts = models.map((m) =>
+    m.recorded.length || m.current === null ? m.recorded : [{ t: now, v: m.current }]
+  );
+  const recorded = sumSeries(recordedParts);
   const projected = sumSeries(models.map((m) => m.projected));
   const recordedByAccount: Record<string, number[]> = {};
   const projectedByAccount: Record<string, number[]> = {};
-  for (const part of parts) {
-    recordedByAccount[part.key] = recorded.map((p) => heldValueAt(part.model.recorded, p.t));
+  for (const [index, part] of parts.entries()) {
+    recordedByAccount[part.key] = recorded.map((p) => heldValueAt(recordedParts[index], p.t));
     projectedByAccount[part.key] = projected.map((p) => heldValueAt(part.model.projected, p.t));
   }
   const horizonEndMs = Math.max(now, ...models.map((m) => m.horizonEndMs));
