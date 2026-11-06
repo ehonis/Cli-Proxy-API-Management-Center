@@ -96,6 +96,25 @@ describe('weekly / 5-hour exchange rate', () => {
 });
 
 describe('linked projection', () => {
+  test('new seats do not invent history in any linked view', () => {
+    const old = pair({ key: 'old', weekly: 50, five: 50, weeklyDrop: 0, fiveDrop: 0 });
+    const fresh = pair({ key: 'fresh', weekly: 100, five: 100, weeklyDrop: 0, fiveDrop: 0 });
+    fresh.weekly.samples = [];
+    fresh.five.samples = [];
+    const models = buildLinkedPoolModels(
+      [old.weekly, fresh.weekly],
+      [old.five, fresh.five],
+      options
+    );
+    for (const model of [models.weekly, models.fiveHour, models.combined]) {
+      const before = model.recorded.findIndex((p) => p.t === NOW - HOUR_MS);
+      expect(model.recorded[before].v).toBe(50);
+      expect(model.recordedByAccount.fresh[before]).toBe(0);
+      expect(model.current).toBe(150);
+      expect(at(model.recorded, NOW - 1)).toBe(50);
+      expect(model.resets.filter((r) => !r.projected)).toEqual([]);
+    }
+  });
   test('weekly-exhausted seats contribute no usable 5-hour history or current capacity', () => {
     const locked = pair({ key: 'locked', weekly: 0, five: 100, weeklyDrop: 0, fiveDrop: 0 });
     const ready = pair({ key: 'ready', weekly: 60, five: 22, weeklyDrop: 0, fiveDrop: 12 });
@@ -340,6 +359,28 @@ describe('provider merge', () => {
       { t: NOW + HOUR_MS, delta: 50, labels: ['A', 'B'], projected: true },
     ]);
     expect(merged.nextReset?.delta).toBe(50);
+  });
+
+  test('a provider first read at Now has no recorded contribution before Now', () => {
+    const a = model(100, [50, 50, 50], null);
+    const b = model(100, [100, 100, 100], null);
+    a.recorded = [
+      { t: NOW - HOUR_MS, v: 50 },
+      { t: NOW, v: 50 },
+    ];
+    b.recorded = [];
+    b.current = 100;
+    const merged = mergePoolModels(
+      [
+        { key: 'a', label: 'A', model: a },
+        { key: 'b', label: 'B', model: b },
+      ],
+      NOW
+    );
+    expect(merged.recorded[0].v).toBe(50);
+    expect(merged.recordedByAccount.b[0]).toBe(0);
+    expect(merged.recorded.at(-1)?.v).toBe(150);
+    expect(at(merged.recorded, NOW - 1)).toBe(50);
   });
 });
 

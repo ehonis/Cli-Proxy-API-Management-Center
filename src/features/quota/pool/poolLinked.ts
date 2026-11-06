@@ -293,6 +293,7 @@ function withProjection(
 function usableFiveHourHistory(
   base: PoolModel,
   weekly: Map<string, PoolAccountInput>,
+  five: Map<string, PoolAccountInput>,
   now: number
 ): PoolModel {
   const byAccount: Record<string, number[]> = {};
@@ -300,6 +301,8 @@ function usableFiveHourHistory(
   for (const account of base.accounts) {
     const input = weekly.get(account.key);
     const track = input ? buildAccountTrack(input, now) : [];
+    const fiveInput = five.get(account.key);
+    const firstObserved = fiveInput ? buildAccountTrack(fiveInput, now)[0]?.t : undefined;
     const values = base.recorded.map((point, i) => {
       const known = track.length > 0 && point.t >= track[0].t;
       const blocked = known && (trackValueAt(track, point.t) ?? 100) <= EMPTY_EPSILON;
@@ -308,7 +311,11 @@ function usableFiveHourHistory(
     byAccount[account.key] = values;
     for (let i = 1; i < values.length; i += 1) {
       const delta = values[i] - values[i - 1];
-      if (delta >= MIN_RESET_LABEL) {
+      if (
+        delta >= MIN_RESET_LABEL &&
+        firstObserved !== undefined &&
+        base.recorded[i - 1].t >= firstObserved
+      ) {
         rises.push({ t: base.recorded[i].t, delta, label: account.label });
       }
     }
@@ -367,9 +374,15 @@ function combinedRecorded(
     Math.floor((options.recordedFromMs - options.burnWindowHours * HOUR_MS) / STEP_MS) * STEP_MS,
     Number.isFinite(first) ? Math.floor(first / STEP_MS) * STEP_MS : now
   );
-  const times: number[] = [];
-  for (let t = start; t < now; t += STEP_MS) times.push(t);
-  times.push(now);
+  const instants = new Set<number>([now]);
+  for (let t = start; t < now; t += STEP_MS) instants.add(t);
+  for (const track of tracks.flatMap((tr) => [tr.weekly, tr.five])) {
+    if (track.length && track[0].t > start) {
+      instants.add(track[0].t - 1);
+      instants.add(track[0].t);
+    }
+  }
+  const times = [...instants].sort((a, b) => a - b);
 
   const byAccount: Record<string, number[]> = {};
   const rises: { t: number; delta: number; label: string }[] = [];
@@ -378,6 +391,7 @@ function combinedRecorded(
     const values = times.map((t) => {
       const vw = tr.weekly.length ? trackValueAt(tr.weekly, t) : null;
       const vf = tr.five.length ? trackValueAt(tr.five, t) : null;
+      if ((tr.weekly.length && vw === null) || (tr.five.length && vf === null)) return 0;
       const own = Math.min(100, vf ?? Infinity, vw === null ? Infinity : vw * ratio);
       return (Number.isFinite(own) ? own : 0) * share;
     });
@@ -385,7 +399,8 @@ function combinedRecorded(
     for (let i = 1; i < values.length; i += 1) {
       const rise = values[i] - values[i - 1];
       // A refill shows as a step; gradual creep is just a weekly cap lifting.
-      if (rise >= MIN_RESET_LABEL) {
+      const firstObserved = Math.max(tr.weekly[0]?.t ?? -Infinity, tr.five[0]?.t ?? -Infinity);
+      if (rise >= MIN_RESET_LABEL && times[i - 1] >= firstObserved) {
         rises.push({ t: times[i], delta: rise, label: labels.get(tr.key) ?? tr.key });
       }
     }
@@ -590,7 +605,7 @@ export function buildLinkedPoolModels(
     limitEvents,
   });
   const fiveHour = withProjection(
-    usableFiveHourHistory(fiveBase, weeklyByKey, now),
+    usableFiveHourHistory(fiveBase, weeklyByKey, fiveByKey, now),
     times,
     views.five,
     {

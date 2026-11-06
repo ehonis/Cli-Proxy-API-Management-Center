@@ -31,6 +31,11 @@ const options = {
 };
 
 describe('account track', () => {
+  test('has no recorded value before its first observation', () => {
+    const track = buildAccountTrack(account({ remaining: 100 }), NOW);
+    expect(trackValueAt(track, NOW - 1)).toBeNull();
+    expect(trackValueAt(track, NOW)).toBe(100);
+  });
   test('interpolates between samples and jumps to 100% at a reset in between', () => {
     const reset = NOW - 10 * HOUR_MS;
     const track = buildAccountTrack(
@@ -64,6 +69,26 @@ describe('account track', () => {
 });
 
 describe('pool model', () => {
+  test('a new seat contributes only from its first observation', () => {
+    const model = buildPoolModel(
+      [
+        account({
+          key: 'old',
+          remaining: 50,
+          samples: [{ t: NOW - 2 * HOUR_MS, remaining: 50, resetAtMs: NOW + WEEK_MS }],
+        }),
+        account({ key: 'new', remaining: 100 }),
+      ],
+      options
+    );
+    const before = model.recorded.findIndex((p) => p.t === NOW - HOUR_MS);
+    expect(model.recorded[before].v).toBe(50);
+    expect(model.recordedByAccount.new[before]).toBe(0);
+    expect(model.current).toBe(150);
+    expect(model.burnPerHour).toBe(0);
+    expect(model.recorded.find((p) => p.t === NOW - 1)?.v).toBe(50);
+    expect(model.resets.filter((r) => !r.projected)).toEqual([]);
+  });
   test('sums accounts into the pool and measures burn from recorded drops only', () => {
     const model = buildPoolModel(
       [
