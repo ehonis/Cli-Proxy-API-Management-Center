@@ -28,6 +28,8 @@ import {
   trackValueAt,
   type PoolAccountInput,
   type PoolAccountProjection,
+  type PoolLimitEvent,
+  type PoolLimitEventKind,
   type PoolModel,
   type PoolModelOptions,
   type PoolResetEvent,
@@ -161,6 +163,27 @@ function clusterResets(raw: { t: number; delta: number; label: string }[], proje
   return out.filter((event) => event.delta >= MIN_RESET_LABEL);
 }
 
+/** Same-kind events closer than this share one marker. */
+const EVENT_CLUSTER_MS = 90 * 60_000;
+
+function clusterLimitEvents(
+  raw: { t: number; kind: PoolLimitEventKind; label: string }[]
+): PoolLimitEvent[] {
+  const out: PoolLimitEvent[] = [];
+  const lastOfKind = new Map<PoolLimitEventKind, PoolLimitEvent>();
+  for (const event of [...raw].sort((a, b) => a.t - b.t)) {
+    const last = lastOfKind.get(event.kind);
+    if (last && event.t - last.t <= EVENT_CLUSTER_MS) {
+      if (!last.labels.includes(event.label)) last.labels.push(event.label);
+      continue;
+    }
+    const next = { t: event.t, kind: event.kind, labels: [event.label] };
+    out.push(next);
+    lastOfKind.set(event.kind, next);
+  }
+  return out;
+}
+
 /** Projected half of one view, before it is folded into a PoolModel. */
 interface ProjectedView {
   byAccount: Record<string, number[]>;
@@ -189,6 +212,7 @@ function withProjection(
     beforeResetOnly: boolean;
     /** Report the first projected refill after a run-dry as the account's next reset. */
     resetFromRecovery?: boolean;
+    limitEvents: PoolLimitEvent[];
   }
 ): PoolModel {
   const { now, horizonEndMs } = options;
@@ -251,6 +275,7 @@ function withProjection(
 
   return {
     ...base,
+    limitEvents: options.limitEvents,
     burnPerHour: options.burnPerHour,
     projected,
     projectedByAccount,
@@ -401,6 +426,12 @@ export function buildLinkedPoolModels(
     times.push(t);
   }
   const views = { weekly: emptyView(keys), five: emptyView(keys), combined: emptyView(keys) };
+  const rawEvents: { t: number; kind: PoolLimitEventKind; label: string }[] = [];
+  // An account already dry at Now is in the stats, not a future marker.
+  const weeklyOut = (s: AccountState) => !!s.weekly && s.weekly.remaining <= EMPTY_EPSILON;
+  const fiveOut = (s: AccountState) =>
+    !!s.five && s.five.remaining <= EMPTY_EPSILON && !weeklyOut(s);
+  const wasOut = new Map(state.map((s) => [s.key, { weekly: weeklyOut(s), five: fiveOut(s) }]));
   const record = (s: AccountState) => {
     const values = {
       weekly: s.weekly ? s.weekly.remaining : 0,
@@ -481,13 +512,25 @@ export function buildLinkedPoolModels(
         for (const w of [s.weekly, s.five]) {
           while (w && w.resetAtMs !== null && w.resetAtMs <= t) {
             s.lastResetMs = Math.max(s.lastResetMs ?? 0, w.resetAtMs);
+            if (w === s.weekly) {
+              rawEvents.push({ t: w.resetAtMs, kind: 'weekly-reset', label: s.label });
+            }
             w.remaining = 100;
             w.resetAtMs += w.periodMs;
           }
         }
       }
     }
-    for (const s of state) record(s);
+    for (const s of state) {
+      record(s);
+      const prev = wasOut.get(s.key);
+      const out = { weekly: weeklyOut(s), five: fiveOut(s) };
+      if (prev && out.weekly && !prev.weekly) {
+        rawEvents.push({ t, kind: 'weekly-out', label: s.label });
+      }
+      if (prev && out.five && !prev.five) rawEvents.push({ t, kind: 'five-out', label: s.label });
+      wasOut.set(s.key, out);
+    }
     const anyUsable = state.some((s) => capacityOf(s) > EMPTY_EPSILON / 100);
     const rate = anyUsable ? consumed : 0;
     views.weekly.rates.push(rate);
@@ -496,6 +539,8 @@ export function buildLinkedPoolModels(
   }
 
   /* ---------- fold into models ---------- */
+
+  const limitEvents = clusterLimitEvents(rawEvents);
 
   const nextWeekly = (key: string) => firstReset.get(key)?.weekly ?? null;
   const nextFive = (key: string) => firstReset.get(key)?.five ?? null;
@@ -507,6 +552,7 @@ export function buildLinkedPoolModels(
     burnPerHour: burn,
     nextResetOf: nextWeekly,
     beforeResetOnly: true,
+    limitEvents,
   });
   const fiveHour = withProjection(fiveBase, times, views.five, {
     now,
@@ -514,6 +560,7 @@ export function buildLinkedPoolModels(
     burnPerHour: burn === null ? null : burn * k,
     nextResetOf: nextFive,
     beforeResetOnly: true,
+    limitEvents,
   });
 
   const rec = combinedRecorded(keys, shares, weeklyByKey, fiveByKey, labels, k, options);
@@ -540,6 +587,7 @@ export function buildLinkedPoolModels(
     recordedRate: fiveBase.recordedRate,
     projectedRate: [],
     resets: rec.resets,
+    limitEvents: [],
     poolEmptyAtMs: null,
     firstEmpty: null,
     nextReset: null,
@@ -555,6 +603,7 @@ export function buildLinkedPoolModels(
     nextResetOf: (key) => nextFive(key) ?? nextWeekly(key),
     beforeResetOnly: false,
     resetFromRecovery: true,
+    limitEvents,
   });
 
   return { weekly, fiveHour, combined, ratio };

@@ -1681,7 +1681,13 @@
     "pool_legend_usable": "Доступно сейчас",
     "pool_linked_note": "Прогноз учитывает недельный и 5-часовой лимиты вместе",
     "pool_ratio_history": "{{name}}1% недели ≈ {{value}}% 5-часового окна (по истории)",
-    "pool_ratio_assumed": "{{name}}1% недели ≈ {{value}}% 5-часового окна (оценка, мало истории)"
+    "pool_ratio_assumed": "{{name}}1% недели ≈ {{value}}% 5-часового окна (оценка, мало истории)",
+    "pool_event_weekly_out": "Неделя исчерпана",
+    "pool_event_five_out": "5ч исчерпаны",
+    "pool_event_weekly_reset": "Сброс недели",
+    "pool_event_weekly_out_long": "Недельный лимит исчерпан",
+    "pool_event_five_out_long": "5-часовой лимит исчерпан",
+    "pool_event_weekly_reset_long": "Недельный лимит сбрасывается"
   },
   "plugin_management": {
     "title": "Управление плагинами",

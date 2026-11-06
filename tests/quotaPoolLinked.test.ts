@@ -174,6 +174,56 @@ describe('linked projection', () => {
   });
 });
 
+describe('limit markers', () => {
+  const kinds = (events: { kind: string }[], kind: string) => events.filter((e) => e.kind === kind);
+
+  test('mark the weekly run-out and refill, not a 5-hour run-out the weekly one hides', () => {
+    const { weekly, five } = pair({ weekly: 5, five: 52, weeklyDrop: 4, fiveDrop: 32 });
+    const models = buildLinkedPoolModels([weekly], [five], options);
+    const events = models.weekly.limitEvents;
+    const out = kinds(events, 'weekly-out');
+    expect(out.length).toBeGreaterThanOrEqual(1);
+    expect(out[0].t).toBe(models.weekly.poolEmptyAtMs!);
+    expect(out[0].labels).toEqual(['a']);
+    expect(kinds(events, 'weekly-reset')[0].t).toBe(NOW + 72 * HOUR_MS);
+    // The 5-hour window still has room when the weekly limit locks the account out.
+    expect(kinds(events, 'five-out').filter((e) => e.t < NOW + 72 * HOUR_MS)).toEqual([]);
+    // One simulation, so every view marks the same moments.
+    expect(models.fiveHour.limitEvents).toEqual(events);
+    expect(models.combined.limitEvents).toEqual(events);
+  });
+
+  test('mark a 5-hour run-out once per window', () => {
+    const { weekly, five } = pair({ weekly: 80, five: 10, weeklyDrop: 4, fiveDrop: 32 });
+    const { weekly: w } = buildLinkedPoolModels([weekly], [five], options);
+    const fiveOut = kinds(w.limitEvents, 'five-out').filter((e) => e.t < NOW + 3 * HOUR_MS);
+    expect(fiveOut.length).toBe(1);
+    expect(fiveOut[0].t - NOW).toBeLessThanOrEqual(HOUR_MS);
+  });
+
+  test('an account already dry at Now gets no marker for it', () => {
+    const { weekly, five } = pair({ weekly: 0, five: 60, weeklyDrop: 4, fiveDrop: 32 });
+    const { weekly: w } = buildLinkedPoolModels([weekly], [five], options);
+    expect(kinds(w.limitEvents, 'weekly-out').filter((e) => e.t < NOW + 72 * HOUR_MS)).toEqual([]);
+  });
+
+  test('accounts running out close together share one marker', () => {
+    const a = pair({ key: 'a', weekly: 1, five: 60, weeklyDrop: 4, fiveDrop: 32 });
+    const b = pair({ key: 'b', weekly: 1, five: 60, weeklyDrop: 4, fiveDrop: 32 });
+    const { weekly: w } = buildLinkedPoolModels([a.weekly, b.weekly], [a.five, b.five], options);
+    const out = kinds(w.limitEvents, 'weekly-out').filter((e) => e.t < NOW + 72 * HOUR_MS);
+    expect(out.length).toBe(1);
+    expect(out[0].labels.sort()).toEqual(['a', 'b']);
+  });
+
+  test('survive the provider merge', () => {
+    const { weekly, five } = pair({ weekly: 5, five: 52, weeklyDrop: 4, fiveDrop: 32 });
+    const { weekly: w } = buildLinkedPoolModels([weekly], [five], options);
+    const merged = mergePoolModels([{ key: 'claude', label: 'Claude', model: w }], NOW);
+    expect(merged.limitEvents).toEqual(w.limitEvents);
+  });
+});
+
 describe('provider merge', () => {
   const model = (capacity: number, values: number[], emptyAt: number | null): PoolModel => {
     const series = values.map((v, i) => ({ t: NOW + i * HOUR_MS, v }));
@@ -190,6 +240,7 @@ describe('provider merge', () => {
       recordedRate: [],
       projectedRate: [],
       resets: [],
+      limitEvents: [],
       poolEmptyAtMs: emptyAt,
       firstEmpty: emptyAt === null ? null : { key: 'x', label: 'x', t: emptyAt },
       nextReset: null,

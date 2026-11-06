@@ -62,6 +62,20 @@ export interface PoolResetEvent {
   projected: boolean;
 }
 
+/** What a limit marker on the chart stands for. */
+export type PoolLimitEventKind = 'weekly-out' | 'five-out' | 'weekly-reset';
+
+/**
+ * A projected moment worth a marker: an account's weekly or 5-hour limit
+ * running dry, or its weekly limit refilling. Accounts that hit the same
+ * kind within a short span share one event.
+ */
+export interface PoolLimitEvent {
+  t: number;
+  kind: PoolLimitEventKind;
+  labels: string[];
+}
+
 export interface PoolAccountProjection {
   key: string;
   label: string;
@@ -89,6 +103,8 @@ export interface PoolModel {
   recordedRate: SeriesPoint[];
   projectedRate: SeriesPoint[];
   resets: PoolResetEvent[];
+  /** Projected limit run-outs and weekly refills, sorted by time. */
+  limitEvents: PoolLimitEvent[];
   poolEmptyAtMs: number | null;
   firstEmpty: { key: string; label: string; t: number } | null;
   nextReset: PoolResetEvent | null;
@@ -511,6 +527,7 @@ export function buildPoolModel(inputs: PoolAccountInput[], options: PoolModelOpt
     recordedRate,
     projectedRate,
     resets,
+    limitEvents: [],
     poolEmptyAtMs,
     firstEmpty,
     nextReset,

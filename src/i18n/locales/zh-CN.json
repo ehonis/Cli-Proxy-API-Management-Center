@@ -1676,7 +1676,13 @@
     "pool_legend_usable": "当前可用",
     "pool_linked_note": "预测同时计入周额度与 5 小时额度",
     "pool_ratio_history": "{{name}}周额度 1% ≈ 5 小时窗口的 {{value}}%（来自历史）",
-    "pool_ratio_assumed": "{{name}}周额度 1% ≈ 5 小时窗口的 {{value}}%（估计值，历史不足）"
+    "pool_ratio_assumed": "{{name}}周额度 1% ≈ 5 小时窗口的 {{value}}%（估计值，历史不足）",
+    "pool_event_weekly_out": "周额度用尽",
+    "pool_event_five_out": "5小时用尽",
+    "pool_event_weekly_reset": "周额度重置",
+    "pool_event_weekly_out_long": "周额度预计用尽",
+    "pool_event_five_out_long": "5 小时额度预计用尽",
+    "pool_event_weekly_reset_long": "周额度重置"
   },
   "plugin_management": {
     "title": "插件管理",

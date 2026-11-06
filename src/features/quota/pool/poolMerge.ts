@@ -7,7 +7,13 @@
  * so the breakdown bands and tooltip show one band per provider.
  */
 
-import type { PoolAccountProjection, PoolModel, PoolResetEvent, SeriesPoint } from './poolModel';
+import type {
+  PoolAccountProjection,
+  PoolLimitEvent,
+  PoolModel,
+  PoolResetEvent,
+  SeriesPoint,
+} from './poolModel';
 
 const EMPTY_EPSILON = 0.5;
 
@@ -81,6 +87,10 @@ export function mergePoolModels(parts: PoolMergePart[], now: number): PoolModel 
 
   const resets: PoolResetEvent[] = models.flatMap((m) => m.resets).sort((a, b) => a.t - b.t);
   const nextReset = resets.find((r) => r.projected && r.t > now && r.t <= horizonEndMs) ?? null;
+  // Each provider's accounts keep their own names, so the chart can still say whose limit it is.
+  const limitEvents: PoolLimitEvent[] = models
+    .flatMap((m) => m.limitEvents)
+    .sort((a, b) => a.t - b.t);
 
   const accounts: PoolAccountProjection[] = parts.map((part) => ({
     key: part.key,
@@ -103,6 +113,7 @@ export function mergePoolModels(parts: PoolMergePart[], now: number): PoolModel 
     recordedRate: sumSeries(models.map((m) => m.recordedRate)),
     projectedRate: sumSeries(models.map((m) => m.projectedRate)),
     resets,
+    limitEvents,
     poolEmptyAtMs,
     firstEmpty,
     nextReset,

@@ -1702,7 +1702,13 @@
     "pool_legend_usable": "目前可用",
     "pool_linked_note": "預測同時計入週額度與 5 小時額度",
     "pool_ratio_history": "{{name}}週額度 1% ≈ 5 小時視窗的 {{value}}%（來自歷史）",
-    "pool_ratio_assumed": "{{name}}週額度 1% ≈ 5 小時視窗的 {{value}}%（估計值，歷史不足）"
+    "pool_ratio_assumed": "{{name}}週額度 1% ≈ 5 小時視窗的 {{value}}%（估計值，歷史不足）",
+    "pool_event_weekly_out": "週額度用盡",
+    "pool_event_five_out": "5小時用盡",
+    "pool_event_weekly_reset": "週額度重置",
+    "pool_event_weekly_out_long": "週額度預計用盡",
+    "pool_event_five_out_long": "5 小時額度預計用盡",
+    "pool_event_weekly_reset_long": "週額度重置"
   },
   "plugin_management": {
     "title": "插件管理",

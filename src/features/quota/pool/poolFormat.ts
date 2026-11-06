@@ -1,6 +1,6 @@
 /** Display formatting shared by the pool chart, its stats and the ledger. */
 
-import { DAY_MS, HOUR_MS, MINUTE_MS } from './poolModel';
+import { DAY_MS, HOUR_MS, MINUTE_MS, type PoolLimitEventKind } from './poolModel';
 
 export const formatPercent = (value: number | null | undefined) =>
   value === null || value === undefined || !Number.isFinite(value) ? '--' : `${Math.round(value)}%`;
@@ -85,3 +85,15 @@ export const formatResetNoWeekday = (ms: number, locale?: string) =>
     hour: 'numeric',
     minute: '2-digit',
   });
+
+/** Marker label above the chart, and its longer name for the legend and tooltip. */
+export const EVENT_SHORT_KEY: Record<PoolLimitEventKind, string> = {
+  'weekly-out': 'quota_management.pool_event_weekly_out',
+  'five-out': 'quota_management.pool_event_five_out',
+  'weekly-reset': 'quota_management.pool_event_weekly_reset',
+};
+export const EVENT_LONG_KEY: Record<PoolLimitEventKind, string> = {
+  'weekly-out': 'quota_management.pool_event_weekly_out_long',
+  'five-out': 'quota_management.pool_event_five_out_long',
+  'weekly-reset': 'quota_management.pool_event_weekly_reset_long',
+};
