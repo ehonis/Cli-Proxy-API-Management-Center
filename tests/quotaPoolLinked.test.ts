@@ -96,6 +96,55 @@ describe('weekly / 5-hour exchange rate', () => {
 });
 
 describe('linked projection', () => {
+  test('weekly-exhausted seats contribute no usable 5-hour history or current capacity', () => {
+    const locked = pair({ key: 'locked', weekly: 0, five: 100, weeklyDrop: 0, fiveDrop: 0 });
+    const ready = pair({ key: 'ready', weekly: 60, five: 22, weeklyDrop: 0, fiveDrop: 12 });
+    const model = buildLinkedPoolModels(
+      [locked.weekly, ready.weekly],
+      [locked.five, ready.five],
+      options
+    ).fiveHour;
+    expect(model.current).toBe(22);
+    expect(model.recorded.at(-1)?.v).toBe(model.projected[0].v);
+    expect(model.recordedByAccount.locked.every((v) => v === 0)).toBe(true);
+    expect(model.recorded.at(0)?.v).toBe(34);
+    expect(model.accounts.find((a) => a.key === 'locked')?.nextResetMs).toBe(
+      locked.weekly.resetAtMs
+    );
+  });
+
+  test('gates historical capacity at the weekly limit without treating the lockout as burn', () => {
+    const { weekly, five } = pair({ weekly: 0, five: 80, weeklyDrop: 10, fiveDrop: 10 });
+    weekly.samples.push({ t: NOW - HOUR_MS, remaining: 0, resetAtMs: weekly.resetAtMs });
+    const model = buildLinkedPoolModels([weekly], [five], options).fiveHour;
+    expect(at(model.recorded, NOW - 2 * HOUR_MS)).toBe(90);
+    expect(at(model.recorded, NOW - HOUR_MS)).toBe(0);
+    expect(model.current).toBe(0);
+    expect(model.burnPerHour).toBeCloseTo(5);
+    expect(model.resets.filter((r) => !r.projected)).toHaveLength(0);
+  });
+
+  test('a weekly reset restores historical 5-hour capacity only after it happens', () => {
+    const reset = NOW - HOUR_MS;
+    const { weekly, five } = pair({ weekly: 90, five: 80, weeklyDrop: 0, fiveDrop: 0 });
+    weekly.samples = [{ t: NOW - 2 * HOUR_MS, remaining: 0, resetAtMs: reset }];
+    const model = buildLinkedPoolModels([weekly], [five], options).fiveHour;
+    expect(at(model.recorded, NOW - 2 * HOUR_MS)).toBe(0);
+    expect(at(model.recorded, reset - 5 * 60_000)).toBe(0);
+    expect(at(model.recorded, reset)).toBe(80);
+    expect(model.current).toBe(80);
+    expect(model.resets.find((r) => !r.projected)?.delta).toBe(80);
+  });
+
+  test('gating preserves plan weights and accounts with no weekly window', () => {
+    const small = pair({ key: 'small', weekly: 0, five: 100, weeklyDrop: 0, fiveDrop: 0, size: 1 });
+    const big = pair({ key: 'big', weekly: 50, five: 40, weeklyDrop: 0, fiveDrop: 0, size: 5 });
+    const model = buildLinkedPoolModels([small.weekly], [small.five, big.five], options).fiveHour;
+    expect(model.capacity).toBe(120);
+    expect(model.current).toBe(40);
+    expect(model.recorded.at(-1)?.v).toBe(model.projected[0].v);
+  });
+
   test('a run-dry weekly limit locks the 5-hour view out past its own reset', () => {
     // 2 weekly %/h (16 five %/h at a rate of 8): weekly 5% lasts 2.5h.
     const { weekly, five } = pair({ weekly: 5, five: 52, weeklyDrop: 4, fiveDrop: 32 });
@@ -268,6 +317,29 @@ describe('provider merge', () => {
     // Empty only when every provider is.
     expect(merged.poolEmptyAtMs).toBe(NOW + 2 * HOUR_MS);
     expect(merged.firstEmpty?.t).toBe(NOW + HOUR_MS);
+  });
+
+  test('simultaneous provider resets share a marker and sum the refill', () => {
+    const a = model(100, [40, 60, 0], NOW + HOUR_MS);
+    const b = model(100, [20, 50, 0], NOW + HOUR_MS);
+    a.limitEvents = [{ t: NOW + HOUR_MS, kind: 'weekly-reset', labels: ['A'] }];
+    b.limitEvents = [{ t: NOW + HOUR_MS, kind: 'weekly-reset', labels: ['B'] }];
+    a.resets = [{ t: NOW + HOUR_MS, delta: 20, labels: ['A'], projected: true }];
+    b.resets = [{ t: NOW + HOUR_MS, delta: 30, labels: ['B'], projected: true }];
+    const merged = mergePoolModels(
+      [
+        { key: 'claude', label: 'Claude', model: a },
+        { key: 'codex', label: 'Codex', model: b },
+      ],
+      NOW
+    );
+    expect(merged.limitEvents).toEqual([
+      { t: NOW + HOUR_MS, kind: 'weekly-reset', labels: ['A', 'B'] },
+    ]);
+    expect(merged.resets).toEqual([
+      { t: NOW + HOUR_MS, delta: 50, labels: ['A', 'B'], projected: true },
+    ]);
+    expect(merged.nextReset?.delta).toBe(50);
   });
 });
 

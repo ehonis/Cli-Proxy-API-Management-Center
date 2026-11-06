@@ -85,12 +85,34 @@ export function mergePoolModels(parts: PoolMergePart[], now: number): PoolModel 
       .filter((f): f is NonNullable<PoolModel['firstEmpty']> => f !== null)
       .sort((a, b) => a.t - b.t)[0] ?? null;
 
-  const resets: PoolResetEvent[] = models.flatMap((m) => m.resets).sort((a, b) => a.t - b.t);
+  const resetsByTime = new Map<string, PoolResetEvent>();
+  for (const reset of models.flatMap((m) => m.resets)) {
+    const key = `${reset.t}-${reset.projected}`;
+    const previous = resetsByTime.get(key);
+    resetsByTime.set(
+      key,
+      previous
+        ? {
+            ...previous,
+            delta: previous.delta + reset.delta,
+            labels: [...new Set([...previous.labels, ...reset.labels])],
+          }
+        : { ...reset, labels: [...reset.labels] }
+    );
+  }
+  const resets = [...resetsByTime.values()].sort((a, b) => a.t - b.t);
   const nextReset = resets.find((r) => r.projected && r.t > now && r.t <= horizonEndMs) ?? null;
   // Each provider's accounts keep their own names, so the chart can still say whose limit it is.
-  const limitEvents: PoolLimitEvent[] = models
-    .flatMap((m) => m.limitEvents)
-    .sort((a, b) => a.t - b.t);
+  const eventsByTime = new Map<string, PoolLimitEvent>();
+  for (const event of models.flatMap((m) => m.limitEvents)) {
+    const key = `${event.kind}-${event.t}`;
+    const previous = eventsByTime.get(key);
+    eventsByTime.set(key, {
+      ...event,
+      labels: [...new Set([...(previous?.labels ?? []), ...event.labels])],
+    });
+  }
+  const limitEvents = [...eventsByTime.values()].sort((a, b) => a.t - b.t);
 
   const accounts: PoolAccountProjection[] = parts.map((part) => ({
     key: part.key,

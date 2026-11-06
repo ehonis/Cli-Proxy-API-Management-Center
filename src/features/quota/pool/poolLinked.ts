@@ -275,6 +275,7 @@ function withProjection(
 
   return {
     ...base,
+    current: base.current === null ? null : projected[0].v,
     limitEvents: options.limitEvents,
     burnPerHour: options.burnPerHour,
     projected,
@@ -286,6 +287,40 @@ function withProjection(
     nextReset,
     horizonEndMs,
     accounts,
+  };
+}
+
+function usableFiveHourHistory(
+  base: PoolModel,
+  weekly: Map<string, PoolAccountInput>,
+  now: number
+): PoolModel {
+  const byAccount: Record<string, number[]> = {};
+  const rises: { t: number; delta: number; label: string }[] = [];
+  for (const account of base.accounts) {
+    const input = weekly.get(account.key);
+    const track = input ? buildAccountTrack(input, now) : [];
+    const values = base.recorded.map((point, i) => {
+      const known = track.length > 0 && point.t >= track[0].t;
+      const blocked = known && (trackValueAt(track, point.t) ?? 100) <= EMPTY_EPSILON;
+      return blocked ? 0 : (base.recordedByAccount[account.key]?.[i] ?? 0);
+    });
+    byAccount[account.key] = values;
+    for (let i = 1; i < values.length; i += 1) {
+      const delta = values[i] - values[i - 1];
+      if (delta >= MIN_RESET_LABEL) {
+        rises.push({ t: base.recorded[i].t, delta, label: account.label });
+      }
+    }
+  }
+  return {
+    ...base,
+    recorded: base.recorded.map((point, i) => ({
+      t: point.t,
+      v: base.accounts.reduce((sum, account) => sum + byAccount[account.key][i], 0),
+    })),
+    recordedByAccount: byAccount,
+    resets: clusterResets(rises, false),
   };
 }
 
@@ -554,14 +589,20 @@ export function buildLinkedPoolModels(
     beforeResetOnly: true,
     limitEvents,
   });
-  const fiveHour = withProjection(fiveBase, times, views.five, {
-    now,
-    horizonEndMs: fiveHorizon,
-    burnPerHour: burn === null ? null : burn * k,
-    nextResetOf: nextFive,
-    beforeResetOnly: true,
-    limitEvents,
-  });
+  const fiveHour = withProjection(
+    usableFiveHourHistory(fiveBase, weeklyByKey, now),
+    times,
+    views.five,
+    {
+      now,
+      horizonEndMs: fiveHorizon,
+      burnPerHour: burn === null ? null : burn * k,
+      nextResetOf: nextFive,
+      beforeResetOnly: true,
+      resetFromRecovery: true,
+      limitEvents,
+    }
+  );
 
   const rec = combinedRecorded(keys, shares, weeklyByKey, fiveByKey, labels, k, options);
   const combinedAccounts: PoolAccountProjection[] = keys.map((key) => ({
