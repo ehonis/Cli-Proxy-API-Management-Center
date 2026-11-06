@@ -351,6 +351,25 @@
   background: var(--pool-accent);
 }
 
+.swatchEvent {
+  display: inline-block;
+  width: 0;
+  height: 14px;
+  border-left: 2px dashed var(--event-color);
+}
+
+.swatchEvent-weekly-out {
+  --event-color: var(--error-color);
+}
+
+.swatchEvent-five-out {
+  --event-color: var(--amber-color);
+}
+
+.swatchEvent-weekly-reset {
+  --event-color: var(--success-color);
+}
+
 .swatchQuiet {
   display: inline-block;
   width: 12px;

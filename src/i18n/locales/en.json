@@ -1678,7 +1678,13 @@
     "pool_legend_usable": "Usable now",
     "pool_linked_note": "Projection counts the weekly and 5-hour limits together",
     "pool_ratio_history": "{{name}}1% weekly ≈ {{value}}% of a 5-hour window (from history)",
-    "pool_ratio_assumed": "{{name}}1% weekly ≈ {{value}}% of a 5-hour window (assumed, not enough history)"
+    "pool_ratio_assumed": "{{name}}1% weekly ≈ {{value}}% of a 5-hour window (assumed, not enough history)",
+    "pool_event_weekly_out": "Weekly out",
+    "pool_event_five_out": "5h out",
+    "pool_event_weekly_reset": "Weekly reset",
+    "pool_event_weekly_out_long": "Weekly limit runs out",
+    "pool_event_five_out_long": "5-hour limit runs out",
+    "pool_event_weekly_reset_long": "Weekly limit resets"
   },
   "plugin_management": {
     "title": "Plugin Management",

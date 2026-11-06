@@ -1,7 +1,8 @@
 /**
  * Pool chart: one provider's pooled remaining quota over the visible range.
  * Solid = recorded by the server, dashed = projected at the chosen burn rate,
- * with every reset jump labelled by how much it adds back.
+ * with every reset jump labelled by how much it adds back, and a dashed marker
+ * wherever a limit is projected to run out or the weekly limit refills.
  *
  * Layout only; all numbers come from poolModel.ts.
  */
@@ -14,10 +15,19 @@ import {
   HOUR_MS,
   idleSpans,
   type PoolModel,
+  type PoolLimitEvent,
+  type PoolLimitEventKind,
   type IdleSchedule,
   type SeriesPoint,
 } from './poolModel';
-import { bandOpacity, formatPercent, formatRate, formatStamp } from './poolFormat';
+import {
+  bandOpacity,
+  EVENT_LONG_KEY,
+  EVENT_SHORT_KEY,
+  formatPercent,
+  formatRate,
+  formatStamp,
+} from './poolFormat';
 import styles from './PoolChart.module.scss';
 
 export type PoolChartMode = 'remaining' | 'rate';
@@ -37,12 +47,19 @@ export interface PoolChartProps {
   label: string;
   /** Smallest refill worth a label, in pool percent. */
   minResetLabel?: number;
+  /** Which projected limit events get a marker. */
+  eventKinds?: readonly PoolLimitEventKind[];
 }
 
 const HEIGHT = 380;
 const M = { top: 44, right: 14, bottom: 46, left: 56 };
 const LABEL_W = 44;
 const LABEL_H = 16;
+/** Baselines of the two marker label rows above the plot. */
+const EVENT_ROWS = [M.top - 24, M.top - 7];
+/** How close the crosshair has to be for the tooltip to list a marker. */
+const EVENT_HOVER_PX = 8;
+const EVENT_CHAR_W = 6.8;
 
 type Box = { x0: number; x1: number; y0: number; y1: number };
 const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
@@ -93,6 +110,7 @@ export function PoolChart({
   idle,
   label,
   minResetLabel = 0,
+  eventKinds = [],
 }: PoolChartProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage;
@@ -232,6 +250,48 @@ export function PoolChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rateMode, model, startMs, endMs, plotW, yMax, locale, now, minResetLabel]);
 
+  /* ---------- limit markers ---------- */
+
+  const markers = useMemo(() => {
+    const placed: Box[] = [];
+    if (now >= startMs && now <= endMs) {
+      // The Now label sits in the top row.
+      placed.push({
+        x0: x(now) - 20,
+        x1: x(now) + 20,
+        y0: EVENT_ROWS[0] - 14,
+        y1: EVENT_ROWS[0] + 3,
+      });
+    }
+    // Weekly run-outs claim label space first; 5-hour ones repeat and give way.
+    const priority: Record<PoolLimitEventKind, number> = {
+      'weekly-out': 0,
+      'weekly-reset': 1,
+      'five-out': 2,
+    };
+    const events = model.limitEvents
+      .filter((e) => eventKinds.includes(e.kind) && e.t > now && e.t >= startMs && e.t <= endMs)
+      .sort((a, b) => priority[a.kind] - priority[b.kind] || a.t - b.t);
+    const out = events.map((event: PoolLimitEvent) => {
+      const cx = x(event.t);
+      const text = t(EVENT_SHORT_KEY[event.kind]);
+      const half = (text.length * EVENT_CHAR_W) / 2 + 4;
+      let labelY: number | null = null;
+      for (const row of EVENT_ROWS) {
+        const box = { x0: cx - half, x1: cx + half, y0: row - 14, y1: row + 3 };
+        if (box.x0 < 2 || box.x1 > width - 2) continue;
+        if (placed.some((other) => overlaps(box, other))) continue;
+        placed.push(box);
+        labelY = row;
+        break;
+      }
+      return { key: `${event.kind}-${event.t}`, event, cx, text, labelY };
+    });
+    return out.sort((a, b) => a.event.t - b.event.t);
+    // x depends on width via plotW.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, eventKinds, startMs, endMs, now, plotW, width, t]);
+
   /* ---------- axes ---------- */
 
   const days = useMemo(() => {
@@ -323,8 +383,10 @@ export function PoolChart({
         v: ((byAccount[a.key]?.[idx] ?? 0) * 100) / a.share,
       }));
     }
-    return { t: hoverT, v, isProjected, accounts };
-  }, [hoverT, now, projected, recorded, rateMode, showAccounts, model]);
+    const nearPx = (EVENT_HOVER_PX * span) / plotW;
+    const events = markers.map((m) => m.event).filter((e) => Math.abs(e.t - hoverT) <= nearPx);
+    return { t: hoverT, v, isProjected, accounts, events };
+  }, [hoverT, now, projected, recorded, rateMode, showAccounts, model, markers, span, plotW]);
 
   const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -462,6 +524,31 @@ export function PoolChart({
           )}
         </g>
 
+        {markers.map((marker) => (
+          <g key={marker.key} className={styles[`event-${marker.event.kind}`]}>
+            <line
+              className={styles.eventLine}
+              x1={marker.cx}
+              x2={marker.cx}
+              y1={marker.labelY === null ? M.top : marker.labelY + 4}
+              y2={M.top + plotH}
+            />
+            {marker.labelY !== null && (
+              <text
+                className={styles.eventLabel}
+                x={marker.cx}
+                y={marker.labelY}
+                textAnchor="middle"
+              >
+                <title>
+                  {`${t(EVENT_LONG_KEY[marker.event.kind])} · ${formatStamp(marker.event.t, locale)} · ${marker.event.labels.join(', ')}`}
+                </title>
+                {marker.text}
+              </text>
+            )}
+          </g>
+        ))}
+
         {resetLabels.map((label) => (
           <text
             key={label.key}
@@ -544,6 +631,18 @@ export function PoolChart({
                 : t('quota_management.pool_legend_recorded')}
             </span>
           </div>
+          {hover.events.length > 0 && (
+            <ul className={styles.tooltipEvents}>
+              {hover.events.map((e) => (
+                <li key={`${e.kind}-${e.t}`} className={styles[`event-${e.kind}`]}>
+                  <span className={styles.tooltipEventName}>
+                    {t(EVENT_LONG_KEY[e.kind])} · {formatStamp(e.t, locale)}
+                  </span>
+                  <span>{e.labels.join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {hover.accounts.length > 0 && (
             <ul className={styles.tooltipAccounts}>
               {hover.accounts.map((a) => (

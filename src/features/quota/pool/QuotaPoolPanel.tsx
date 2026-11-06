@@ -33,9 +33,10 @@ import {
   type PoolWindow,
 } from './poolSettings';
 import type { WindowRatio } from './poolLinked';
-import { DAY_MS, type PoolModel } from './poolModel';
+import { DAY_MS, type PoolLimitEventKind, type PoolModel } from './poolModel';
 import {
   bandOpacity,
+  EVENT_LONG_KEY,
   formatClock,
   formatHourOfDay,
   formatMonthDay,
@@ -73,6 +74,13 @@ export interface QuotaPoolPanelProps {
   /** Providers with a pool, before any merging; the merge toggle needs two. */
   providerCount: number;
 }
+
+/** Limit markers per view: 5-hour run-outs repeat too often for the two-week chart. */
+const EVENT_KINDS: Record<PoolWindow, readonly PoolLimitEventKind[]> = {
+  weekly: ['weekly-out', 'weekly-reset'],
+  'five-hour': ['five-out', 'weekly-out', 'weekly-reset'],
+  combined: ['five-out', 'weekly-out', 'weekly-reset'],
+};
 
 const ACCENTS: Record<PoolProvider | 'all', { dark: string; light: string }> = {
   claude: { dark: '#ef7f63', light: '#d4593b' },
@@ -211,6 +219,10 @@ function PoolCard({
     card.type === 'all' ? t('quota_management.pool_all_providers') : getTypeLabel(t, card.type);
   const combinedView = settings.window === 'combined';
   const accent = ACCENTS[card.type][resolvedTheme === 'dark' ? 'dark' : 'light'];
+  const eventKinds = EVENT_KINDS[settings.window];
+  const shownEvents = eventKinds.filter((kind) =>
+    model.limitEvents.some((e) => e.kind === kind && e.t > now && e.t <= range.endMs)
+  );
 
   const poolEmpty = model.poolEmptyAtMs
     ? formatWhen(model.poolEmptyAtMs, now, locale)
@@ -322,6 +334,7 @@ function PoolCard({
         label={name}
         // Every 5-hour window refills in the combined view; label only the big ones.
         minResetLabel={combinedView ? model.capacity / 4 : 0}
+        eventKinds={eventKinds}
       />
 
       <footer className={styles.legend}>
@@ -346,6 +359,12 @@ function PoolCard({
             {t('quota_management.pool_legend_quiet')}
           </span>
         )}
+        {shownEvents.map((kind) => (
+          <span key={kind} className={styles.legendItem}>
+            <span className={`${styles.swatchEvent} ${styles[`swatchEvent-${kind}`]}`} />
+            {t(EVENT_LONG_KEY[kind])}
+          </span>
+        ))}
         {settings.showAccounts &&
           settings.mode === 'remaining' &&
           model.accounts.map((account, index) => (
